@@ -32,7 +32,7 @@ Reserve cerca de 1 GB de memoria livre para o navegador interno.
 
 ## Acessos
 
-O administrador entra com `ADMIN_USER` (padrao `admin`) e `ADMIN_PASSWORD`. Os amigos entram com o usuario e a senha criados por ele. Os dados sao compartilhados. Amigos veem a lista, favoritam, anotam, exportam CSV e iniciam, param e retomam buscas. Cadastrar palavras-chave, ajustes, relatorio manual, backup e acessos sao so do administrador. Bloquear ou apagar um amigo derruba a sessao dele na hora.
+O administrador entra com `ADMIN_USER` (padrao `admin`) e `ADMIN_PASSWORD`. Os amigos entram com o usuario e a senha criados por ele. Os dados sao compartilhados. Amigos veem a lista, favoritam, anotam, exportam CSV e iniciam, param e retomam buscas e cadastram palavras-chave. Ajustes, relatorio manual, backup e acessos sao so do administrador. Bloquear ou apagar um amigo derruba a sessao dele na hora.
 
 ## Se der bloqueio
 

@@ -254,7 +254,7 @@ function renderLogin() {
 let viewEl = null;
 let runstateEl = null;
 let runBtn = null;
-const TABS_ALL = [['inicio', 'Início', false], ['paginas', 'Páginas', false], ['busca', 'Busca', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
+const TABS_ALL = [['inicio', 'Início', false], ['paginas', 'Páginas', false], ['busca', 'Busca', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', false], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
 const tabsFor = () => TABS_ALL.filter(([, , adminOnly]) => !adminOnly || isAdmin());
 
 let themeBtnEl = null;
@@ -302,7 +302,7 @@ function renderTab() {
   else if (S.tab === 'busca') viewSearch();
   else if (S.tab === 'paginas') viewPages();
   else if (S.tab === 'rodadas') viewRuns();
-  else if (S.tab === 'palavras' && isAdmin()) viewKeywords();
+  else if (S.tab === 'palavras') viewKeywords();
   else if (S.tab === 'ajustes' && isAdmin()) viewSettings();
   else viewAccount();
 }
@@ -1471,7 +1471,7 @@ async function loadUsers(box) {
       } catch (ex) { toast(ex.message, true); }
     } }, 'Criar usuário');
     box.append(
-      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar, exportar e iniciar buscas. Cadastrar palavras-chave, ajustes e acessos ficam só com você (' + d.admin + ').'),
+      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar, exportar, cadastrar palavras-chave e iniciar buscas. Ajustes e acessos ficam só com você (' + d.admin + ').'),
       h('div', { class: 'fgrid', style: null },
         h('div', null, h('label', { class: 'lbl', for: 'nu-user' }, 'Usuário'), un),
         h('div', null, h('label', { class: 'lbl', for: 'nu-pass' }, 'Senha inicial'), pw)),
