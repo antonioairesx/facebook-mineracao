@@ -4,7 +4,7 @@ const toastEl = document.getElementById('toast');
 
 const S = {
   tab: 'inicio',
-  defaultCountries: 'MX,CO,CL,PE',
+  defaultCountries: 'ALL',
   search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '' },
   filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false, hideChat: true },
   facets: { niches: [], tags: [], offers: [] },
@@ -517,6 +517,49 @@ async function loadHome() {
   } catch (ex) { toast(ex.message, true); }
 }
 
+/* ---------- seletor de paises ---------- */
+const CN = { list: null, byCode: {}, p: null };
+function loadCountries() {
+  if (!CN.p) CN.p = api('/api/countries').then((d) => { CN.list = d.rows; for (const [c, n] of d.rows) CN.byCode[c] = n; return CN; }).catch(() => { CN.p = null; return CN; });
+  return CN.p;
+}
+const countryName = (c) => CN.byCode[String(c).toUpperCase()] || c;
+const codesOf = (text) => String(text || '').split(/[\s,;]+/).filter(Boolean).map((c) => c.toUpperCase());
+
+// Campo de paises: digite o nome ou a sigla (a grafia e corrigida) ou escolha na lista. Cada pais vira uma etiqueta.
+function countryPicker({ id, value, placeholder, onChange }) {
+  let codes = codesOf(value);
+  const chips = h('div', { class: 'cchips' });
+  const dl = h('datalist', { id: id + '-dl' });
+  const input = h('input', { type: 'text', id, list: id + '-dl', placeholder, autocomplete: 'off', spellcheck: 'false' });
+  const box = h('div', { class: 'cpick' }, chips, input, dl);
+  const paint = () => {
+    chips.replaceChildren(...codes.map((c) => h('span', { class: 'chip tag cx' }, countryName(c),
+      h('button', { type: 'button', 'aria-label': 'Remover ' + countryName(c), onclick: () => { codes = codes.filter((x) => x !== c); paint(); onChange && onChange(codes.join(',')); } }, 'x'))));
+    input.placeholder = codes.length ? 'Adicionar outro país' : placeholder;
+  };
+  loadCountries().then(() => { dl.replaceChildren(...(CN.list || []).map(([, n]) => h('option', { value: n }))); paint(); });
+  const commit = async () => {
+    const txt = input.value.trim();
+    if (!txt) return;
+    try {
+      const d = await api('/api/countries/resolve?q=' + encodeURIComponent(txt));
+      if (d.unknown.length) toast('Não encontrei: ' + d.unknown.join(', ') + '. Escolha na lista.', true);
+      for (const c of d.codes) {
+        if (c === 'ALL') codes = ['ALL'];
+        else if (!codes.includes(c)) codes = codes.filter((x) => x !== 'ALL').concat(c);
+      }
+      input.value = '';
+      paint();
+      onChange && onChange(codes.join(','));
+    } catch (ex) { toast(ex.message, true); }
+  };
+  input.addEventListener('change', commit);
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+  paint();
+  return { el: box, get: () => codes.join(','), set: (v) => { codes = codesOf(v); paint(); } };
+}
+
 /* ---------- busca ---------- */
 let searchProg = null;
 let searchPreview = null;
@@ -525,7 +568,7 @@ let searchList = null;
 
 function plannedSearches() {
   const se = S.search;
-  const over = (se.countries || '').split(/[\s,;]+/).filter((c) => /^[A-Za-z]{2}$/.test(c));
+  const over = codesOf(se.countries);
   const defs = (S.defaultCountries || '').split(/[\s,;]+/).filter(Boolean);
   const pool = se.mode === 'pick' ? S.keywords.filter((k) => se.sel.has(k.id)) : S.keywords.filter((k) => k.active);
   let total = 0;
@@ -541,8 +584,7 @@ function viewSearch() {
   const seg = h('div', { class: 'statusseg' });
   const modeNote = h('div', { class: 'hint' });
   const pickBox = h('div', { class: 'pickbox' });
-  const countries = h('input', { type: 'text', id: 'b-countries', placeholder: 'Vazio usa os países de cada palavra ou os padrão (' + S.defaultCountries + ')', value: se.countries });
-  countries.addEventListener('input', () => { se.countries = countries.value; paintPreview(); });
+  const countries = countryPicker({ id: 'b-countries', value: se.countries, placeholder: 'Vazio usa os padrão (' + codesOf(S.defaultCountries).map(countryName).join(', ') + ')', onChange: (v) => { se.countries = v; paintPreview(); } });
   searchPreview = h('div', { class: 'preview' });
   searchStartBtn = h('button', { class: 'btn primary big', onclick: startSearch }, ic('search'), 'Iniciar busca');
   searchProg = h('div', { class: 'card', id: 'searchprog' });
@@ -591,7 +633,7 @@ function viewSearch() {
   const left = h('div', { class: 'card pad searchform' },
     h('h2', { class: 'sec' }, 'Nova busca'),
     seg, modeNote, pickBox,
-    h('div', null, h('label', { class: 'lbl', for: 'b-countries' }, 'Países (opcional)'), countries),
+    h('div', null, h('label', { class: 'lbl', for: 'b-countries' }, 'Países (opcional)'), countries.el),
     searchPreview, searchStartBtn);
   viewEl.append(h('div', { class: 'searchgrid' }, left, searchProg));
   paintMode();
@@ -1267,19 +1309,21 @@ async function loadKeywords() {
   const d = await api('/api/keywords');
   S.keywords = d.rows;
   if (d.default_countries) S.defaultCountries = d.default_countries;
+  await loadCountries();
 }
 
 function viewKeywords() {
   const text = h('textarea', { id: 'k-text', placeholder: 'Uma por linha. Use + entre termos:\nbajar de peso + truco + gelatina' });
   const lang = h('select', { id: 'k-lang' }, [['es', 'Espanhol'], ['en', 'Inglês'], ['pt', 'Português']].map(([v, l]) => h('option', { value: v }, l)));
   const niche = h('input', { type: 'text', id: 'k-niche', placeholder: 'Emagrecimento', maxlength: '60' });
-  const countries = h('input', { type: 'text', id: 'k-countries', placeholder: 'Vazio usa os países padrão' });
+  const countries = countryPicker({ id: 'k-countries', value: '', placeholder: 'Vazio usa os países padrão' });
   const add = h('button', { class: 'btn primary', onclick: async () => {
     if (!text.value.trim()) { toast('Escreva ao menos uma palavra-chave.', true); return; }
     try {
-      const d = await api('/api/keywords', { method: 'POST', body: { text: text.value, lang: lang.value, niche: niche.value, countries: countries.value } });
+      const d = await api('/api/keywords', { method: 'POST', body: { text: text.value, lang: lang.value, niche: niche.value, countries: countries.get() } });
       toast(d.added + ' adicionadas' + (d.skipped ? ', ' + d.skipped + ' repetidas ou vazias ignoradas' : '') + '.');
       text.value = '';
+      countries.set('');
       await loadKeywords();
       paintKeywords();
     } catch (ex) { toast(ex.message, true); }
@@ -1302,7 +1346,7 @@ function viewKeywords() {
       field('Palavras-chave', text, 'k-text'),
       field('Idioma', lang, 'k-lang'),
       field('Nicho', niche, 'k-niche'),
-      field('Países (opcional)', countries, 'k-countries'),
+      field('Países (opcional)', countries.el, 'k-countries'),
       h('div', { class: 'hint' }, 'O sinal de + vira espaço na busca. Países em siglas separadas por vírgula, ex: MX, CO.'),
       add,
       h('div', { class: 'hint' }, 'Ou carregue de uma vez as combinações em espanhol e inglês dos nichos Emagrecimento e Renda extra.'),
@@ -1339,7 +1383,7 @@ function paintKeywords() {
     });
     tbody.append(h('tr', { style: null },
       h('td', { class: 'cb' }, cb),
-      h('td', null, h('div', { class: 'pname' }, k.term), h('div', { class: 'pmeta' }, [k.lang.toUpperCase(), k.niche, k.countries ? k.countries.replace(/,/g, ' ') : 'países padrão'].filter(Boolean).join(' / '))),
+      h('td', null, h('div', { class: 'pname' }, k.term), h('div', { class: 'pmeta' }, [k.lang.toUpperCase(), k.niche, k.countries ? codesOf(k.countries).map(countryName).join(', ') : 'países padrão'].filter(Boolean).join(' / '))),
       h('td', { class: 'num dim' }, String(k.pages) + (k.pages === 1 ? ' página' : ' páginas')),
       h('td', { class: 'num' }, k.good ? h('span', { class: 'chip pass' }, k.good + (k.good === 1 ? ' boa' : ' boas')) : h('span', { class: 'faint' }, '0')),
       h('td', { class: 'dim' }, k.last_run_at ? ago(k.last_run_at) : 'nunca'),
@@ -1375,21 +1419,21 @@ async function viewSettings() {
       inputs[key] = el;
       return h('div', null, h('label', { class: 'lbl', for: 's-' + key }, label), el, hint ? h('div', { class: 'hint' }, hint) : null);
     });
-    const countries = h('input', { type: 'text', id: 's-countries', value: s.default_countries });
+    const countries = countryPicker({ id: 's-countries', value: s.default_countries, placeholder: 'Mundo todo' });
     const mode = h('select', { id: 's-mode' }, [['off', 'Desligado'], ['daily', 'Todo dia'], ['interval', 'A cada N horas']].map(([v, l]) => h('option', { value: v, selected: s.schedule_mode === v }, l)));
     const time = h('input', { type: 'time', id: 's-time', value: s.schedule_time });
     const searchMode = h('select', { id: 's-smode' }, [['wide', 'Larga (recomendado)'], ['exact', 'Exata']].map(([v, l]) => h('option', { value: v, selected: s.search_mode === v }, l)));
     const prio = h('input', { type: 'checkbox', id: 's-prio', checked: s.prioritize === '1' });
     const autoRep = h('input', { type: 'checkbox', id: 's-arep', checked: s.auto_report === '1' });
     const save = h('button', { class: 'btn primary', onclick: async () => {
-      const body = { default_countries: countries.value, schedule_mode: mode.value, schedule_time: time.value, search_mode: searchMode.value, prioritize: prio.checked, auto_report: autoRep.checked };
+      const body = { default_countries: countries.get() || 'ALL', schedule_mode: mode.value, schedule_time: time.value, search_mode: searchMode.value, prioritize: prio.checked, auto_report: autoRep.checked };
       for (const [k, el] of Object.entries(inputs)) body[k] = el.value;
       try { await api('/api/settings', { method: 'PUT', body }); toast('Ajustes salvos.'); refreshCriteria(); } catch (ex) { toast(ex.message, true); }
     } }, 'Salvar ajustes');
     viewEl.append(h('div', { class: 'settings' },
       h('fieldset', null, h('h2', { class: 'sec' }, 'Critério e ritmo'), h('div', { class: 'fgrid' }, fields)),
       h('fieldset', null, h('h2', { class: 'sec' }, 'Países e agenda (fuso ' + d.timezone + ')'), h('div', { class: 'fgrid' },
-        h('div', null, h('label', { class: 'lbl', for: 's-countries' }, 'Países padrão'), countries, h('div', { class: 'hint' }, 'Siglas separadas por vírgula.')),
+        h('div', null, h('label', { class: 'lbl', for: 's-countries' }, 'Países padrão'), countries.el, h('div', { class: 'hint' }, 'Padrão: Mundo todo. Digite o nome do país (a grafia é corrigida) ou escolha na lista.')),
         h('div', null, h('label', { class: 'lbl', for: 's-mode' }, 'Rodar sozinho'), mode),
         h('div', null, h('label', { class: 'lbl', for: 's-time' }, 'Horário (modo diário)'), time)
       )),

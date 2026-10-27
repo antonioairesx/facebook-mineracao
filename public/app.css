@@ -494,3 +494,10 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 .pad .log.short { margin: 14px 0 0; }
 
 .actrow { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }
+
+.cpick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.cpick input { flex: 1 1 160px; min-width: 140px; }
+.cchips { display: contents; }
+.chip.cx { display: inline-flex; align-items: center; gap: 6px; }
+.chip.cx button { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; font: inherit; opacity: .7; }
+.chip.cx button:hover { opacity: 1; }

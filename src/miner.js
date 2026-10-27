@@ -3,6 +3,8 @@ import { config } from './config.js';
 import { openBrowser, collect, searchUrl, pageUrl, sleep, rnd } from './crawler.js';
 import { savePageFromAds, groupByPage } from './store.js';
 import { splitTerm, matchesAll } from './terms.js';
+import { isChatAd } from './classify.js';
+import { resolveCountry } from './countries.js';
 import { saveDailyReport } from './report.js';
 
 const state = {
@@ -32,10 +34,15 @@ export function stopRun() {
 }
 
 export function parseCountries(text) {
-  return String(text || '')
-    .split(/[\s,;]+/)
-    .map((c) => c.trim().toUpperCase())
-    .filter((c) => /^[A-Z]{2}$/.test(c) || c === 'ALL');
+  const out = [];
+  for (const part of String(text || '').split(/[,;\n]+/)) {
+    const t = part.trim();
+    if (!t) continue;
+    const r = resolveCountry(t);
+    if (r && !out.includes(r.code)) out.push(r.code);
+  }
+  // mundo todo sozinho: se tiver ALL junto com outros, vale ALL
+  return out.includes('ALL') ? ['ALL'] : out;
 }
 
 export function buildSearches(keywords, settings, override = []) {
@@ -257,7 +264,9 @@ async function runMining(runId, { keywords = [], specific = false, override = []
 
       counters.searches_done = i + 1;
       counters.ads_seen += r.ads.length;
-      const usable = split.filters.length ? r.ads.filter((a) => matchesAll(a, split.filters)) : r.ads;
+      const textOk = split.filters.length ? r.ads.filter((a) => matchesAll(a, split.filters)) : r.ads;
+      const usable = textOk.filter((a) => !isChatAd(a));
+      if (usable.length < textOk.length) log(`  ${textOk.length - usable.length} anúncios ignorados (link para WhatsApp, Telegram ou Linktree)`);
       if (split.filters.length) log(`  busca larga: ${usable.length} de ${r.ads.length} anúncios contêm "${split.filters.join(' ')}"`);
       const groups = groupByPage(usable);
       let newHere = 0;
@@ -329,8 +338,14 @@ async function runMining(runId, { keywords = [], specific = false, override = []
           finalError = r.blocked;
           break;
         }
-        const mine = r.ads.filter((a) => a.page_id === String(c.page_id));
-        if (!mine.length) {
+        const allMine = r.ads.filter((a) => a.page_id === String(c.page_id));
+        const mine = allMine.filter((a) => !isChatAd(a));
+        const chatDropped = allMine.length - mine.length;
+        if (!mine.length && chatDropped) {
+          zeros = 0;
+          log(`  só anúncios com WhatsApp, Telegram ou Linktree: página descartada`);
+          d.prepare("UPDATE pages SET status = 'discarded', last_deep_at = ? WHERE page_id = ?").run(now(), String(c.page_id));
+        } else if (!mine.length) {
           zeros += 1;
           log('  nenhum anuncio capturado nesta pagina');
           if (zeros >= 3) {
@@ -346,7 +361,7 @@ async function runMining(runId, { keywords = [], specific = false, override = []
             pageName: mine[0].page_name,
             profileUri: mine[0].page_profile_uri,
             ads: mine,
-            total: r.total,
+            total: chatDropped ? null : r.total,
             deep: true,
           });
           counters.deep_done += 1;

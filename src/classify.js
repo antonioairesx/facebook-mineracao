@@ -92,3 +92,9 @@ export const SCALE_NEW7 = 5;
 export function isScaling(delta, new7) {
   return (delta !== null && delta !== undefined && delta >= SCALE_DELTA) || (new7 || 0) >= SCALE_NEW7;
 }
+
+// anuncio que leva para conversa ou pagina de links (WhatsApp, Telegram, Linktree e similares)
+export function isChatAd(ad) {
+  const t = classifyAd(ad);
+  return t === 'whatsapp' || t === 'linkhub';
+}

@@ -27,6 +27,7 @@ import { OFFER_LABEL, classifyAd, isScaling, SCALE_DELTA, SCALE_NEW7 } from './c
 import { readThumb, hasThumb } from './thumbs.js';
 import { recomputeAllDerived } from './store.js';
 import { renderPdf, saveDailyReport, listReports, isReportName, REPORT_DIR } from './report.js';
+import { COUNTRIES, resolveCountry } from './countries.js';
 import { storageInfo, bootInfo } from './storage.js';
 const BOOT = bootInfo();
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
@@ -55,6 +56,10 @@ try {
     setSettings({ keywords_seeded: '1' });
   }
 } catch (err) { console.error('Falha ao carregar palavras-chave iniciais', err); }
+// padrao novo: mundo todo (uma vez so, depois respeita o que o admin escolher)
+if (getSettings().countries_world !== '1') {
+  setSettings({ default_countries: 'ALL', countries_world: '1' });
+}
 try { recomputeAllDerived(); } catch (err) { console.error('Falha ao recalcular placares', err); }
 
 const app = Fastify({ trustProxy: true, logger: { level: 'warn' }, bodyLimit: 2 * 1024 * 1024 });
@@ -682,6 +687,20 @@ app.post('/api/keywords/bulk', async (req, reply) => {
 });
 
 // ---------- rodadas ----------
+app.get('/api/countries', async () => ({ rows: COUNTRIES }));
+app.get('/api/countries/resolve', async (req) => {
+  const codes = [];
+  const unknown = [];
+  for (const part of String(req.query.q || '').split(/[,;\n]+/)) {
+    const t = part.trim();
+    if (!t) continue;
+    const r = resolveCountry(t);
+    if (!r) unknown.push(t);
+    else if (!codes.includes(r.code)) codes.push(r.code);
+  }
+  return { codes: codes.includes('ALL') ? ['ALL'] : codes, unknown };
+});
+
 app.get('/api/status', async () => {
   const st = getState();
   const counts = db
@@ -751,7 +770,7 @@ app.get('/api/settings', async () => {
   const s = getSettings();
   const out = {};
   for (const k of Object.keys(DEFAULT_SETTINGS)) {
-    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info', 'last_report_date', 'keywords_seeded'].includes(k)) continue;
+    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info', 'last_report_date', 'keywords_seeded', 'countries_world'].includes(k)) continue;
     out[k] = s[k];
   }
   return { settings: out, timezone: config.timezone, proxy: !!config.proxyServer };

@@ -13,7 +13,7 @@ export const DEFAULT_SETTINGS = {
   delay_min: '3',
   delay_max: '8',
   max_searches_per_run: '60',
-  default_countries: 'MX,CO,CL,PE',
+  default_countries: 'ALL',
   schedule_mode: 'off',
   schedule_time: '03:00',
   schedule_every_hours: '24',
@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = {
   auto_report: '1',
   last_report_date: '',
   keywords_seeded: '0',
+  countries_world: '0',
 };
 
 const SCHEMA = `
