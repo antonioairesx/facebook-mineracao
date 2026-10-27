@@ -38,11 +38,11 @@ export function parseCountries(text) {
     .filter((c) => /^[A-Z]{2}$/.test(c) || c === 'ALL');
 }
 
-export function buildSearches(keywords, settings) {
-  const defaults = parseCountries(settings.default_countries);
+export function buildSearches(keywords, settings, override = []) {
+  const defaults = override.length ? override : parseCountries(settings.default_countries);
   const out = [];
   for (const kw of keywords) {
-    const own = parseCountries(kw.countries);
+    const own = override.length ? [] : parseCountries(kw.countries);
     const countries = own.length ? own : defaults;
     for (const country of countries) out.push({ kw, country });
   }
@@ -89,7 +89,7 @@ function stamp() {
   return new Date().toLocaleTimeString('pt-BR', { timeZone: config.timezone, hour12: false });
 }
 
-export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null } = {}) {
+export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null } = {}) {
   if (state.running) return { ok: false, error: 'Já existe uma rodada em andamento.' };
   const d = openDb();
 
@@ -141,13 +141,13 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
   state.total = 0;
   state.startedAt = now();
 
-  runMining(runId, { keywords: kws, specific }).catch((err) => {
+  runMining(runId, { keywords: kws, specific, override: parseCountries(Array.isArray(countries) ? countries.join(',') : countries) }).catch((err) => {
     console.error('Falha inesperada na rodada', err);
   });
   return { ok: true, runId };
 }
 
-async function runMining(runId, { keywords = [], specific = false, searches: resumeSearches = null, resume = null } = {}) {
+async function runMining(runId, { keywords = [], specific = false, override = [], searches: resumeSearches = null, resume = null } = {}) {
   const d = openDb();
   const settings = getSettings();
   const startedAt = state.startedAt;
@@ -195,7 +195,7 @@ async function runMining(runId, { keywords = [], specific = false, searches: res
       state.total = searches.length;
       log(`Rodada ${runId} retomada na busca ${startIndex + 1} de ${searches.length}.`);
     } else {
-      searches = buildSearches(keywords, settings);
+      searches = buildSearches(keywords, settings, override);
       const cap = num(settings, 'max_searches_per_run');
       if (!specific && searches.length > cap) {
         if (settings.prioritize === '1') {
@@ -203,7 +203,7 @@ async function runMining(runId, { keywords = [], specific = false, searches: res
         } else {
           const start = num(settings, 'search_cursor') % searches.length;
           searches = [...searches.slice(start), ...searches.slice(0, start)].slice(0, cap);
-          setSettings({ search_cursor: (start + cap) % buildSearches(keywords, settings).length });
+          setSettings({ search_cursor: (start + cap) % buildSearches(keywords, settings, override).length });
         }
       }
       d.prepare('UPDATE runs SET plan = ? WHERE id = ?').run(JSON.stringify(searches.map((x) => [x.kw.id, x.country])), runId);

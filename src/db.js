@@ -25,6 +25,7 @@ export const DEFAULT_SETTINGS = {
   prioritize: '1',
   auto_report: '1',
   last_report_date: '',
+  keywords_seeded: '0',
 };
 
 const SCHEMA = `

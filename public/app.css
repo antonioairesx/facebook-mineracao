@@ -438,3 +438,57 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 .alertbar .at p { margin: 4px 0 0; color: var(--dim); font-size: 14px; }
 .alertbar .aa { display: flex; gap: 8px; flex: none; }
 @media (max-width: 640px) { .alertwrap { padding: 12px 12px 0; } .alertbar { flex-wrap: wrap; } .alertbar .aa { width: 100%; } }
+
+
+/* inicio */
+.tabs { overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { white-space: nowrap; }
+.homerun { display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 26px 28px; margin-bottom: 18px; flex-wrap: wrap; }
+.homerun .progress { flex: 1 1 100%; order: 3; }
+.hr-text { min-width: 0; flex: 1 1 320px; }
+.hr-text h2 { margin: 4px 0 4px; font-size: 24px; letter-spacing: -.02em; }
+.hr-text p { margin: 0; color: var(--dim); }
+.hr-actions { display: flex; gap: 10px; flex-wrap: wrap; }
+.eyebrow { display: flex; align-items: center; gap: 8px; font-size: 12.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); font-weight: 600; }
+.progress { height: 8px; border-radius: 999px; background: var(--sunk); overflow: hidden; margin: 14px 0 6px; }
+.progress > i { display: block; height: 100%; background: var(--link); border-radius: 999px; transition: width .4s ease-out; }
+.home { display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.home .numstrip { grid-column: 1 / -1; }
+.numstrip { display: flex; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.ns-item { flex: 1; padding: 18px 24px; display: grid; gap: 2px; border-right: 1px solid var(--line-soft); }
+.ns-item:last-child { border-right: 0; }
+.ns-item b { font-size: 30px; line-height: 1.1; letter-spacing: -.02em; }
+.ns-item span { color: var(--dim); font-size: 14px; }
+.ns-item.warm b { color: var(--coral); }
+.homeside { display: grid; gap: 18px; }
+.cardhead { display: flex; align-items: center; justify-content: space-between; padding: 18px 20px 6px; }
+.cardhead h3 { margin: 0; font-size: 17px; }
+.minilist { padding: 6px 8px 10px; }
+.minipage { display: flex; align-items: center; gap: 14px; width: 100%; background: none; border: 0; text-align: left; padding: 10px 12px; border-radius: var(--radius-s); cursor: pointer; color: inherit; font: inherit; }
+.minipage:hover { background: var(--sunk); }
+.mp-main { flex: 1; min-width: 0; }
+.kwtop { padding: 4px 20px 16px; display: grid; gap: 2px; }
+.kwrow { display: flex; justify-content: space-between; gap: 12px; padding: 9px 0; border-bottom: 1px solid var(--line-soft); }
+.kwrow:last-child { border-bottom: 0; }
+.kwrow span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 900px) { .home { grid-template-columns: 1fr; } .numstrip { flex-wrap: wrap; } .ns-item { flex: 1 1 45%; border-bottom: 1px solid var(--line-soft); } }
+
+/* busca */
+.searchgrid { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+.searchform { display: grid; gap: 16px; }
+.searchform .statusseg { justify-self: start; margin-bottom: 0; }
+.pickbox { display: grid; gap: 10px; }
+.pickfilters { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+.pickbtns { display: flex; gap: 18px; }
+.picklist { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-s); }
+.pickrow { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; flex-wrap: wrap; }
+.pickrow:last-child { border-bottom: 0; }
+.pickrow:hover { background: var(--sunk); }
+.pickrow .pt { flex: 1 1 200px; min-width: 0; }
+.preview { font-weight: 600; }
+.log.short { max-height: 260px; overflow: auto; margin-top: 14px; }
+.lastrun { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.hidden { display: none !important; }
+@media (max-width: 900px) { .searchgrid { grid-template-columns: 1fr; } .pickfilters { grid-template-columns: 1fr; } }
+.pad .log.short { margin: 14px 0 0; }

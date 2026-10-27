@@ -88,3 +88,21 @@ export function defaultKeywordRows() {
   }
   return rows;
 }
+
+// Grava a lista pronta no banco. Retorna quantas entraram. Palavras que ja existem sao ignoradas.
+export function importDefaultKeywords(db, nowFn) {
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO keywords(term, lang, niche, countries, active, created_at) VALUES (?, ?, ?, '', ?, ?)"
+  );
+  const rows = defaultKeywordRows();
+  let added = 0;
+  db.exec('BEGIN');
+  try {
+    for (const r of rows) added += stmt.run(r.term, r.lang, r.niche, r.active, nowFn()).changes;
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return { added, skipped: rows.length - added };
+}

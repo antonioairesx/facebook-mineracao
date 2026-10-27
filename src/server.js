@@ -22,7 +22,7 @@ import { getState, startRun, stopRun, parseCountries } from './miner.js';
 import { startScheduler } from './scheduler.js';
 import { adLink, pageLibraryLink } from './crawler.js';
 import { toCsv } from './csv.js';
-import { defaultKeywordRows } from './default-keywords.js';
+import { importDefaultKeywords } from './default-keywords.js';
 import { OFFER_LABEL, classifyAd, isScaling, SCALE_DELTA, SCALE_NEW7 } from './classify.js';
 import { readThumb, hasThumb } from './thumbs.js';
 import { recomputeAllDerived } from './store.js';
@@ -46,6 +46,13 @@ const STATUSES = ['new', 'seen', 'fav', 'discarded'];
 
 assertConfig();
 const db = openDb();
+// primeira subida: carrega a lista pronta de palavras-chave uma unica vez
+try {
+  if (getSettings().keywords_seeded !== '1') {
+    importDefaultKeywords(db, now);
+    setSettings({ keywords_seeded: '1' });
+  }
+} catch (err) { console.error('Falha ao carregar palavras-chave iniciais', err); }
 try { recomputeAllDerived(); } catch (err) { console.error('Falha ao recalcular placares', err); }
 
 const app = Fastify({ trustProxy: true, logger: { level: 'warn' }, bodyLimit: 2 * 1024 * 1024 });
@@ -600,22 +607,7 @@ app.post('/api/keywords', async (req, reply) => {
   return { ok: true, added, skipped: lines.length - added };
 });
 
-app.post('/api/keywords/import-defaults', async () => {
-  const stmt = db.prepare(
-    "INSERT OR IGNORE INTO keywords(term, lang, niche, countries, active, created_at) VALUES (?, ?, ?, '', ?, ?)"
-  );
-  const rows = defaultKeywordRows();
-  let added = 0;
-  db.exec('BEGIN');
-  try {
-    for (const r of rows) added += stmt.run(r.term, r.lang, r.niche, r.active, now()).changes;
-    db.exec('COMMIT');
-  } catch (err) {
-    db.exec('ROLLBACK');
-    throw err;
-  }
-  return { ok: true, added, skipped: rows.length - added };
-});
+app.post('/api/keywords/import-defaults', async () => ({ ok: true, ...importDefaultKeywords(db, now) }));
 
 app.patch('/api/keywords/:id', async (req, reply) => {
   const body = req.body || {};
@@ -701,7 +693,7 @@ app.get('/api/runs/:id', async (req, reply) => {
 
 app.post('/api/runs', async (req, reply) => {
   const ids = req.body && Array.isArray(req.body.keywordIds) ? req.body.keywordIds : null;
-  const res = startRun({ trigger: 'manual', keywordIds: ids });
+  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries });
   if (!res.ok) return reply.code(409).send({ error: res.error });
   return res;
 });
@@ -732,7 +724,7 @@ app.get('/api/settings', async () => {
   const s = getSettings();
   const out = {};
   for (const k of Object.keys(DEFAULT_SETTINGS)) {
-    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info', 'last_report_date'].includes(k)) continue;
+    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info', 'last_report_date', 'keywords_seeded'].includes(k)) continue;
     out[k] = s[k];
   }
   return { settings: out, timezone: config.timezone, proxy: !!config.proxyServer };

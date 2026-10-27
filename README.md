@@ -58,3 +58,7 @@ Em **Ajustes** o administrador baixa o banco quando quiser (arquivo `.db.gz`). P
 - **Etiquetas, nichos e ofertas:** filtros na aba Páginas. Miniaturas dos criativos ficam guardadas em `/data/thumbs`.
 - **Relatório diário em PDF:** gerado ao fim de cada rodada concluída (`/data/reports`), ou sob demanda pelo botão Relatório PDF.
 - **Navegador:** se o Chromium não estiver na máquina, o app instala sozinho na primeira rodada. No EasyPanel, use o método de construção Dockerfile.
+
+## Telas
+
+Início (resumo e atalhos), Páginas (lista e filtros), Busca (escolhe as palavras e inicia), Rodadas (histórico, retomar, relatórios), Palavras-chave, Ajustes e Conta. Na primeira subida o app carrega sozinho a lista pronta de palavras-chave (uma única vez).

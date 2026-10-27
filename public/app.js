@@ -3,7 +3,9 @@ const root = document.getElementById('root');
 const toastEl = document.getElementById('toast');
 
 const S = {
-  tab: 'paginas',
+  tab: 'inicio',
+  defaultCountries: 'MX,CO,CL,PE',
+  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '' },
   filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false },
   facets: { niches: [], tags: [], offers: [] },
   reports: [],
@@ -252,7 +254,7 @@ function renderLogin() {
 let viewEl = null;
 let runstateEl = null;
 let runBtn = null;
-const TABS_ALL = [['paginas', 'Páginas', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
+const TABS_ALL = [['inicio', 'Início', false], ['paginas', 'Páginas', false], ['busca', 'Busca', true], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
 const tabsFor = () => TABS_ALL.filter(([, , adminOnly]) => !adminOnly || isAdmin());
 
 let themeBtnEl = null;
@@ -296,7 +298,9 @@ function setTab(id) {
 function renderTab() {
   closeDrawer();
   viewEl.replaceChildren();
-  if (S.tab === 'paginas') viewPages();
+  if (S.tab === 'inicio') viewHome();
+  else if (S.tab === 'busca' && isAdmin()) viewSearch();
+  else if (S.tab === 'paginas') viewPages();
   else if (S.tab === 'rodadas') viewRuns();
   else if (S.tab === 'palavras' && isAdmin()) viewKeywords();
   else if (S.tab === 'ajustes' && isAdmin()) viewSettings();
@@ -306,7 +310,7 @@ function renderTab() {
 /* ---------- estado da rodada ---------- */
 function setRunBtn(running) {
   if (!runBtn) return;
-  runBtn.replaceChildren(ic(running ? 'stop' : 'play'), running ? 'Parar' : 'Rodar agora');
+  runBtn.replaceChildren(ic(running ? 'stop' : 'search'), running ? 'Parar' : 'Iniciar busca');
   runBtn.className = running ? 'btn danger' : 'btn primary';
 }
 function paintRunState() {
@@ -369,10 +373,13 @@ async function refreshStatus() {
     const was = S.status && S.status.running;
     S.status = await api('/api/status');
     paintRunState();
+    if (S.tab === 'busca') paintSearchProgress();
+    if (S.tab === 'inicio') paintHomeRun();
     if (was && !S.status.running) {
       toast('Rodada finalizada.');
       if (S.tab === 'paginas') loadPages();
       if (S.tab === 'rodadas') loadRuns();
+      if (S.tab === 'inicio') loadHome();
     }
     schedulePoll();
   } catch { schedulePoll(); }
@@ -391,14 +398,268 @@ async function onRunClick() {
       await api('/api/runs/stop', { method: 'POST', body: {} });
       toast('Pedido de parada enviado.');
     } else {
-      const active = S.keywords.length ? S.keywords.filter((k) => k.active).length : null;
       if (!isAdmin()) return;
-      if (active === 0) { toast('Nenhuma palavra-chave ativa. Cadastre na aba Palavras-chave.', true); return; }
-      await api('/api/runs', { method: 'POST', body: {} });
-      toast('Rodada iniciada.');
+      setTab('busca');
+      return;
     }
     await refreshStatus();
   } catch (ex) { toast(ex.message, true); }
+}
+
+async function startAllNow() {
+  try {
+    if (!S.keywords.some((k) => k.active)) { toast('Nenhuma palavra-chave ativa. Cadastre na aba Palavras-chave.', true); return; }
+    await api('/api/runs', { method: 'POST', body: {} });
+    toast('Busca iniciada.');
+    await refreshStatus();
+  } catch (ex) { toast(ex.message, true); }
+}
+
+
+/* ---------- inicio ---------- */
+let homeRunBox = null;
+let homeBody = null;
+
+function miniPage(r, extra) {
+  return h('button', { class: 'minipage', type: 'button', onclick: () => openDrawer(r.page_id) },
+    avatar(r.name),
+    h('div', { class: 'mp-main' },
+      h('div', { class: 'pname' }, r.name || '(sem nome)'),
+      h('div', { class: 'pmeta' },
+        h('span', { class: 'num' }, r.ads_active + ' anúncios'),
+        h('span', { class: 'num' }, (r.days === null || r.days === undefined ? '?' : r.days) + ' dias'),
+        r.offer_label ? h('span', { class: 'chip offer' }, r.offer_label) : null,
+        extra ? extra(r) : null)),
+    scoreBadge(r.score));
+}
+
+function viewHome() {
+  homeRunBox = h('div', { class: 'card homerun', id: 'homerun' });
+  homeBody = h('div', { class: 'home' });
+  viewEl.append(homeRunBox, homeBody);
+  paintHomeRun();
+  loadHome();
+}
+
+function paintHomeRun() {
+  if (!homeRunBox || !document.getElementById('homerun')) return;
+  const st = S.status || {};
+  const kids = [];
+  if (st.running) {
+    const pct = st.total ? Math.min(100, Math.round((st.done / st.total) * 100)) : 0;
+    const bar = h('div', { class: 'progress' }, h('i'));
+    bar.firstChild.style.width = pct + '%';
+    kids.push(
+      h('div', { class: 'hr-text' },
+        h('div', { class: 'eyebrow' }, h('span', { class: 'dot on' }), 'Busca em andamento'),
+        h('h2', null, (st.phase === 'paginas' ? 'Abrindo páginas' : 'Buscando palavras') + ': ' + st.done + ' de ' + st.total),
+        h('p', null, st.message || 'trabalhando')),
+      bar,
+      h('div', { class: 'hr-actions' },
+        isAdmin() ? h('button', { class: 'btn primary', onclick: () => setTab('busca') }, ic('eye'), 'Acompanhar') : null,
+        isAdmin() ? h('button', { class: 'btn danger', onclick: onRunClick }, ic('stop'), 'Parar') : null));
+  } else {
+    const lr = st.last_run;
+    let title = 'Nenhuma busca feita ainda';
+    let text = isAdmin() ? 'Escolha as palavras na aba Busca e comece.' : 'Ainda não há buscas. O administrador inicia por aqui.';
+    if (lr) {
+      title = 'Última busca ' + ago(lr.finished_at || lr.started_at);
+      text = (RUN_LABEL[lr.status] || lr.status) + '. ' + (st.pages || 0) + ' páginas no banco, ' + (st.fresh || 0) + ' novas para ver.';
+    }
+    kids.push(
+      h('div', { class: 'hr-text' }, h('div', { class: 'eyebrow' }, 'Coleta'), h('h2', null, title), h('p', null, text)),
+      h('div', { class: 'hr-actions' },
+        isAdmin() ? h('button', { class: 'btn primary big', onclick: () => setTab('busca') }, ic('search'), 'Iniciar busca') : null,
+        h('button', { class: 'btn', onclick: () => setTab('paginas') }, ic('layers'), 'Ver páginas')));
+  }
+  homeRunBox.replaceChildren(...kids);
+}
+
+async function loadHome() {
+  try {
+    const [best, scal, ok, all] = await Promise.all([
+      api('/api/pages?qualifies=1&status=new&sort=score&limit=8'),
+      api('/api/pages?scaling=1&status=active&sort=delta&limit=5'),
+      api('/api/pages?qualifies=1&status=active&limit=1'),
+      api('/api/pages?status=active&limit=1'),
+    ]);
+    if (S.tab !== 'inicio' || !homeBody) return;
+    const num = (v, label, warm) => h('div', { class: 'ns-item' + (warm ? ' warm' : '') }, h('b', { class: 'num' }, String(v)), h('span', null, label));
+    const strip = h('div', { class: 'numstrip' },
+      num(ok.total, 'passam no critério'),
+      num(best.total, 'novas que passam', true),
+      num(scal.total, 'escalando agora'),
+      num(all.total, 'páginas na lista'));
+    const bestList = h('div', { class: 'minilist' }, best.rows.length ? best.rows.map((r) => miniPage(r)) : h('div', { class: 'empty' }, 'Nada novo que passe no critério por enquanto.'));
+    const scalList = h('div', { class: 'minilist' }, scal.rows.length ? scal.rows.map((r) => miniPage(r, (x) => h('span', { class: 'chip scale' }, ic('trend'), scaleText(x)))) : h('div', { class: 'empty' }, 'Ninguém escalando ainda. Precisa de pelo menos duas leituras da mesma página.'));
+    const left = h('div', { class: 'card' },
+      h('div', { class: 'cardhead' }, h('h3', null, 'Melhores páginas novas'),
+        h('button', { class: 'linkbtn', onclick: () => { S.filters.status = 'new'; S.filters.only = true; S.sort = 'score'; S.dir = 'desc'; setTab('paginas'); } }, 'Ver todas', ic('right'))),
+      bestList);
+    const rightKids = [h('div', { class: 'card' },
+      h('div', { class: 'cardhead' }, h('h3', null, 'Escalando agora'),
+        h('button', { class: 'linkbtn', onclick: () => { S.filters.scaling = true; S.sort = 'delta'; S.dir = 'desc'; setTab('paginas'); } }, 'Ver todas', ic('right'))),
+      scalList)];
+    if (isAdmin()) {
+      const top = [...S.keywords].filter((k) => k.good > 0).sort((a, b) => b.good - a.good).slice(0, 5);
+      rightKids.push(h('div', { class: 'card' },
+        h('div', { class: 'cardhead' }, h('h3', null, 'Palavras que mais rendem')),
+        top.length
+          ? h('div', { class: 'kwtop' }, top.map((k) => h('div', { class: 'kwrow' }, h('span', null, k.term), h('b', { class: 'num' }, k.good + (k.good === 1 ? ' boa' : ' boas')))))
+          : h('div', { class: 'pad' }, h('div', { class: 'hint' }, 'Aparece depois da primeira busca com páginas que passam no critério.'))));
+    }
+    homeBody.replaceChildren(strip, left, h('div', { class: 'homeside' }, rightKids));
+  } catch (ex) { toast(ex.message, true); }
+}
+
+/* ---------- busca ---------- */
+let searchProg = null;
+let searchPreview = null;
+let searchStartBtn = null;
+let searchList = null;
+
+function plannedSearches() {
+  const se = S.search;
+  const over = (se.countries || '').split(/[\s,;]+/).filter((c) => /^[A-Za-z]{2}$/.test(c));
+  const defs = (S.defaultCountries || '').split(/[\s,;]+/).filter(Boolean);
+  const pool = se.mode === 'pick' ? S.keywords.filter((k) => se.sel.has(k.id)) : S.keywords.filter((k) => k.active);
+  let total = 0;
+  for (const k of pool) {
+    const own = (k.countries || '').split(/[\s,;]+/).filter(Boolean);
+    total += over.length ? over.length : (own.length || defs.length);
+  }
+  return { words: pool.length, searches: total, specific: se.mode === 'pick' };
+}
+
+function viewSearch() {
+  const se = S.search;
+  const seg = h('div', { class: 'statusseg' });
+  const modeNote = h('div', { class: 'hint' });
+  const pickBox = h('div', { class: 'pickbox' });
+  const countries = h('input', { type: 'text', id: 'b-countries', placeholder: 'Vazio usa os países de cada palavra ou os padrão (' + S.defaultCountries + ')', value: se.countries });
+  countries.addEventListener('input', () => { se.countries = countries.value; paintPreview(); });
+  searchPreview = h('div', { class: 'preview' });
+  searchStartBtn = h('button', { class: 'btn primary big', onclick: startSearch }, ic('search'), 'Iniciar busca');
+  searchProg = h('div', { class: 'card', id: 'searchprog' });
+
+  function paintMode() {
+    seg.replaceChildren(...[['all', 'Todas as ativas'], ['pick', 'Escolher palavras']].map(([v, l]) =>
+      h('button', { 'aria-pressed': String(se.mode === v), onclick: () => { se.mode = v; paintMode(); } }, l)));
+    modeNote.textContent = se.mode === 'all'
+      ? 'Usa todas as palavras ativas. Se passar do limite de buscas por rodada (Ajustes), vão primeiro as nunca rodadas e as que mais rendem.'
+      : 'Roda só as palavras marcadas, todas as buscas delas, sem o limite por rodada. Bom para a primeira rodada de teste.';
+    pickBox.classList.toggle('hidden', se.mode !== 'pick');
+    paintPicker();
+    paintPreview();
+  }
+
+  const q = h('input', { type: 'text', placeholder: 'Filtrar palavras', value: se.q });
+  q.addEventListener('input', () => { se.q = q.value.trim().toLowerCase(); paintPicker(); });
+  const lang = h('select', null, [['', 'Todos os idiomas'], ['es', 'Espanhol'], ['en', 'Inglês'], ['pt', 'Português']].map(([v, l]) => h('option', { value: v, selected: se.lang === v }, l)));
+  lang.addEventListener('change', () => { se.lang = lang.value; paintPicker(); });
+  const niches = [...new Set(S.keywords.map((k) => k.niche).filter(Boolean))];
+  const niche = h('select', null, h('option', { value: '' }, 'Todos os nichos'), niches.map((n) => h('option', { value: n, selected: se.niche === n }, n)));
+  niche.addEventListener('change', () => { se.niche = niche.value; paintPicker(); });
+  searchList = h('div', { class: 'picklist' });
+  const visible = () => S.keywords.filter((k) =>
+    (!se.q || k.term.toLowerCase().includes(se.q)) && (!se.lang || k.lang === se.lang) && (!se.niche || k.niche === se.niche));
+  function paintPicker() {
+    if (se.mode !== 'pick') return;
+    const list = visible();
+    searchList.replaceChildren(...(list.length ? list.map((k) => {
+      const cb = h('input', { type: 'checkbox', checked: se.sel.has(k.id), 'aria-label': k.term });
+      cb.addEventListener('change', () => { if (cb.checked) se.sel.add(k.id); else se.sel.delete(k.id); paintPreview(); });
+      return h('label', { class: 'pickrow' }, cb,
+        h('span', { class: 'pt' }, k.term),
+        h('span', { class: 'chip' }, k.lang.toUpperCase() + (k.niche ? ' / ' + k.niche : '')),
+        k.active ? null : h('span', { class: 'chip' }, 'desativada'),
+        k.good ? h('span', { class: 'chip pass' }, k.good + (k.good === 1 ? ' boa' : ' boas')) : null);
+    }) : [h('div', { class: 'empty' }, 'Nenhuma palavra com esses filtros.')]));
+  }
+  pickBox.append(
+    h('div', { class: 'pickfilters' }, q, lang, niche),
+    h('div', { class: 'pickbtns' },
+      h('button', { class: 'linkbtn', type: 'button', onclick: () => { visible().forEach((k) => se.sel.add(k.id)); paintPicker(); paintPreview(); } }, 'Marcar os visíveis'),
+      h('button', { class: 'linkbtn', type: 'button', onclick: () => { se.sel.clear(); paintPicker(); paintPreview(); } }, 'Limpar')),
+    searchList);
+
+  const left = h('div', { class: 'card pad searchform' },
+    h('h2', { class: 'sec' }, 'Nova busca'),
+    seg, modeNote, pickBox,
+    h('div', null, h('label', { class: 'lbl', for: 'b-countries' }, 'Países (opcional)'), countries),
+    searchPreview, searchStartBtn);
+  viewEl.append(h('div', { class: 'searchgrid' }, left, searchProg));
+  paintMode();
+  paintSearchProgress();
+}
+
+function paintPreview() {
+  if (!searchPreview) return;
+  const p = plannedSearches();
+  const running = !!(S.status && S.status.running);
+  searchPreview.textContent = p.words
+    ? p.searches + ' buscas em ' + p.words + (p.words === 1 ? ' palavra' : ' palavras') + (p.specific ? '' : ' (limite por rodada se aplica)')
+    : (p.specific ? 'Marque ao menos uma palavra.' : 'Nenhuma palavra ativa. Cadastre ou ative em Palavras-chave.');
+  if (searchStartBtn) searchStartBtn.disabled = running || !p.words;
+}
+
+async function startSearch() {
+  const se = S.search;
+  const body = {};
+  if (se.mode === 'pick') body.keywordIds = [...se.sel];
+  if (se.countries.trim()) body.countries = se.countries.trim();
+  try {
+    await api('/api/runs', { method: 'POST', body });
+    toast('Busca iniciada.');
+    await refreshStatus();
+  } catch (ex) { toast(ex.message, true); }
+}
+
+let searchLogTimer = 0;
+async function paintSearchProgress() {
+  if (!searchProg || !document.getElementById('searchprog')) return;
+  paintPreview();
+  const st = S.status || {};
+  if (st.running) {
+    const pct = st.total ? Math.min(100, Math.round((st.done / st.total) * 100)) : 0;
+    const bar = h('div', { class: 'progress' }, h('i'));
+    bar.firstChild.style.width = pct + '%';
+    const pre = h('pre', { class: 'log short' }, 'carregando o registro...');
+    searchProg.replaceChildren(
+      h('div', { class: 'pad' },
+        h('div', { class: 'eyebrow' }, h('span', { class: 'dot on' }), 'Em andamento'),
+        h('h2', { class: 'sec' }, (st.phase === 'paginas' ? 'Abrindo páginas' : 'Buscando palavras') + ': ' + st.done + ' de ' + st.total),
+        bar,
+        h('p', { class: 'hint' }, st.message || ''),
+        h('div', { class: 'actions' }, h('button', { class: 'btn danger', onclick: onRunClick }, ic('stop'), 'Parar')),
+        pre));
+    if (st.runId && Date.now() - searchLogTimer > 2500) {
+      searchLogTimer = Date.now();
+      try {
+        const d = await api('/api/runs/' + st.runId);
+        pre.textContent = (d.log || '').split('\n').slice(-14).join('\n') || '(sem registro ainda)';
+        pre.scrollTop = pre.scrollHeight;
+      } catch { /* mantem o texto */ }
+    }
+    return;
+  }
+  const lr = st.last_run;
+  const kids = [h('h2', { class: 'sec' }, 'Andamento')];
+  if (!lr) {
+    kids.push(h('div', { class: 'empty' }, h('b', null, 'Nada rodando'), 'Escolha as palavras e toque em Iniciar busca.'));
+  } else {
+    kids.push(
+      h('div', { class: 'lastrun' },
+        h('span', { class: 'badge ' + lr.status }, RUN_LABEL[lr.status] || lr.status),
+        h('span', { class: 'dim' }, 'Última busca ' + ago(lr.finished_at || lr.started_at))),
+      h('div', { class: 'actions' },
+        h('button', { class: 'btn', onclick: () => { S.runSel = lr.id; setTab('rodadas'); } }, ic('list'), 'Ver a rodada'),
+        ['interrompida', 'cancelada', 'erro'].includes(lr.status)
+          ? h('button', { class: 'btn primary', onclick: async () => {
+            try { await api('/api/runs/' + lr.id + '/resume', { method: 'POST', body: {} }); toast('Busca retomada.'); await refreshStatus(); } catch (ex) { toast(ex.message, true); }
+          } }, ic('play'), 'Retomar de onde parou') : null));
+  }
+  searchProg.replaceChildren(h('div', { class: 'pad' }, ...kids));
 }
 
 /* ---------- paginas ---------- */
@@ -950,7 +1211,7 @@ async function showRun(id) {
     const resume = canResume ? h('button', { class: 'btn primary', onclick: async () => {
       try { await api('/api/runs/' + id + '/resume', { method: 'POST', body: {} }); toast('Rodada retomada.'); await refreshStatus(); } catch (ex) { toast(ex.message, true); }
     } }, ic('play'), 'Retomar de onde parou (' + d.searches_done + '/' + d.searches_total + ')') : null;
-    const rerun = idle ? h('button', { class: 'btn', onclick: onRunClick }, ic('refresh'), 'Rodar novamente') : null;
+    const rerun = idle ? h('button', { class: 'btn', onclick: startAllNow }, ic('refresh'), 'Rodar novamente') : null;
     const logText = d.log || '(sem registro)';
     const dlLog = h('button', { class: 'btn small', onclick: () => {
       const url = URL.createObjectURL(new Blob([logText], { type: 'text/plain;charset=utf-8' }));
@@ -995,6 +1256,7 @@ async function showRun(id) {
 async function loadKeywords() {
   const d = await api('/api/keywords');
   S.keywords = d.rows;
+  if (d.default_countries) S.defaultCountries = d.default_countries;
 }
 
 function viewKeywords() {
@@ -1250,7 +1512,7 @@ async function boot() {
     const sess = await (await fetch('/api/session', { credentials: 'same-origin' })).json();
     if (!sess.authenticated) { renderLogin(); return; }
     S.user = sess.user;
-    S.tab = 'paginas';
+    S.tab = 'inicio';
     await loadKeywords();
     S.status = await api('/api/status');
     renderShell();
