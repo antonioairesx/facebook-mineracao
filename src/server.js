@@ -27,7 +27,8 @@ import { OFFER_LABEL, classifyAd, isScaling, SCALE_DELTA, SCALE_NEW7 } from './c
 import { readThumb, hasThumb } from './thumbs.js';
 import { recomputeAllDerived } from './store.js';
 import { renderPdf, saveDailyReport, listReports, isReportName, REPORT_DIR } from './report.js';
-import { storageInfo } from './storage.js';
+import { storageInfo, bootInfo } from './storage.js';
+const BOOT = bootInfo();
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -112,7 +113,7 @@ app.addHook('onRequest', async (req, reply) => {
   req.user = user;
 });
 
-app.get('/api/health', async () => ({ ok: true }));
+app.get('/api/health', async () => ({ ok: true, storage: storageInfo(), boots: BOOT.boots, data_since: BOOT.since }));
 
 app.get('/api/session', async (req) => {
   const u = resolveUser(req);

@@ -25,3 +25,18 @@ export function storageInfo() {
     return { persistent: null };
   }
 }
+
+// contador de boots guardado em /data: se voltar a 1 depois de um deploy, a pasta foi apagada
+export function bootInfo() {
+  const f = path.join(config.dataDir, '.boot.json');
+  let cur = { since: new Date().toISOString(), boots: 0 };
+  try {
+    cur = JSON.parse(fs.readFileSync(f, 'utf8'));
+  } catch {}
+  cur.boots = (Number(cur.boots) || 0) + 1;
+  try {
+    fs.mkdirSync(config.dataDir, { recursive: true });
+    fs.writeFileSync(f, JSON.stringify(cur));
+  } catch {}
+  return cur;
+}
