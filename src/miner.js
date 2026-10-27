@@ -96,7 +96,7 @@ function stamp() {
   return new Date().toLocaleTimeString('pt-BR', { timeZone: config.timezone, hour12: false });
 }
 
-export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null } = {}) {
+export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null, skipChat = null } = {}) {
   if (state.running) return { ok: false, error: 'Já existe uma rodada em andamento.' };
   const d = openDb();
 
@@ -114,6 +114,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
     const kwById = new Map(d.prepare('SELECT * FROM keywords').all().map((k) => [k.id, k]));
     const searches = plan.map(([id, country]) => ({ kw: kwById.get(id), country })).filter((x) => x.kw);
     d.prepare("UPDATE runs SET status = 'rodando', finished_at = NULL, error = NULL WHERE id = ?").run(run.id);
+    state.skipChat = skipChat === null || skipChat === undefined ? getSettings().skip_chat !== '0' : !!skipChat;
     state.running = true;
     state.runId = run.id;
     state.stop = false;
@@ -139,6 +140,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
     .prepare("INSERT INTO runs(started_at, status, trigger) VALUES (?, 'rodando', ?)")
     .run(now(), trigger);
   const runId = Number(info.lastInsertRowid);
+  state.skipChat = skipChat === null || skipChat === undefined ? getSettings().skip_chat !== '0' : !!skipChat;
   state.running = true;
   state.runId = runId;
   state.stop = false;
@@ -265,7 +267,7 @@ async function runMining(runId, { keywords = [], specific = false, override = []
       counters.searches_done = i + 1;
       counters.ads_seen += r.ads.length;
       const textOk = split.filters.length ? r.ads.filter((a) => matchesAll(a, split.filters)) : r.ads;
-      const usable = textOk.filter((a) => !isChatAd(a));
+      const usable = state.skipChat === false ? textOk : textOk.filter((a) => !isChatAd(a));
       if (usable.length < textOk.length) log(`  ${textOk.length - usable.length} anúncios ignorados (link para WhatsApp, Telegram ou Linktree)`);
       if (split.filters.length) log(`  busca larga: ${usable.length} de ${r.ads.length} anúncios contêm "${split.filters.join(' ')}"`);
       const groups = groupByPage(usable);
@@ -339,7 +341,7 @@ async function runMining(runId, { keywords = [], specific = false, override = []
           break;
         }
         const allMine = r.ads.filter((a) => a.page_id === String(c.page_id));
-        const mine = allMine.filter((a) => !isChatAd(a));
+        const mine = state.skipChat === false ? allMine : allMine.filter((a) => !isChatAd(a));
         const chatDropped = allMine.length - mine.length;
         if (!mine.length && chatDropped) {
           zeros = 0;

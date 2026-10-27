@@ -27,6 +27,7 @@ export const DEFAULT_SETTINGS = {
   last_report_date: '',
   keywords_seeded: '0',
   countries_world: '0',
+  skip_chat: '1',
 };
 
 const SCHEMA = `

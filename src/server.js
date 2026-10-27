@@ -608,7 +608,7 @@ app.get('/api/keywords', async () => {
        FROM keywords k ORDER BY k.niche COLLATE NOCASE, k.term COLLATE NOCASE`
     )
     .all(num(getSettings(), 'min_ads'), num(getSettings(), 'min_days'));
-  return { rows, default_countries: getSettings().default_countries };
+  return { rows, default_countries: getSettings().default_countries, skip_chat: getSettings().skip_chat !== '0' };
 });
 
 app.post('/api/keywords', async (req, reply) => {
@@ -739,7 +739,7 @@ app.get('/api/runs/:id', async (req, reply) => {
 
 app.post('/api/runs', async (req, reply) => {
   const ids = req.body && Array.isArray(req.body.keywordIds) ? req.body.keywordIds : null;
-  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries });
+  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries, skipChat: req.body && req.body.skipChat !== undefined ? !!req.body.skipChat : null });
   if (!res.ok) return reply.code(409).send({ error: res.error });
   return res;
 });
@@ -796,7 +796,7 @@ app.put('/api/settings', async (req, reply) => {
     if (!['wide', 'exact'].includes(body.search_mode)) return reply.code(400).send({ error: 'Modo de busca inválido.' });
     patch.search_mode = body.search_mode;
   }
-  for (const k of ['prioritize', 'auto_report']) {
+  for (const k of ['prioritize', 'auto_report', 'skip_chat']) {
     if (body[k] !== undefined) patch[k] = body[k] === true || body[k] === '1' || body[k] === 1 ? '1' : '0';
   }
   if (body.schedule_mode !== undefined) {

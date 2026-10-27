@@ -5,7 +5,7 @@ const toastEl = document.getElementById('toast');
 const S = {
   tab: 'inicio',
   defaultCountries: 'ALL',
-  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '' },
+  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '', skipChat: true },
   filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false, hideChat: true },
   facets: { niches: [], tags: [], offers: [] },
   reports: [],
@@ -585,6 +585,8 @@ function viewSearch() {
   const modeNote = h('div', { class: 'hint' });
   const pickBox = h('div', { class: 'pickbox' });
   const countries = countryPicker({ id: 'b-countries', value: se.countries, placeholder: 'Vazio usa os padrão (' + codesOf(S.defaultCountries).map(countryName).join(', ') + ')', onChange: (v) => { se.countries = v; paintPreview(); } });
+  const skipChat = h('input', { type: 'checkbox', id: 'b-skipchat', checked: se.skipChat });
+  skipChat.addEventListener('change', () => { se.skipChat = skipChat.checked; });
   searchPreview = h('div', { class: 'preview' });
   searchStartBtn = h('button', { class: 'btn primary big', onclick: startSearch }, ic('search'), 'Iniciar busca');
   searchProg = h('div', { class: 'card', id: 'searchprog' });
@@ -634,6 +636,9 @@ function viewSearch() {
     h('h2', { class: 'sec' }, 'Nova busca'),
     seg, modeNote, pickBox,
     h('div', null, h('label', { class: 'lbl', for: 'b-countries' }, 'Países (opcional)'), countries.el),
+    h('div', null,
+      h('label', { class: 'chk', for: 'b-skipchat' }, skipChat, 'Ignorar anúncios com link para WhatsApp, Telegram e Linktree'),
+      h('div', { class: 'hint' }, 'Esses anúncios não entram na busca nem na contagem. Páginas que só têm esse tipo de anúncio são descartadas.')),
     searchPreview, searchStartBtn);
   viewEl.append(h('div', { class: 'searchgrid' }, left, searchProg));
   paintMode();
@@ -655,6 +660,7 @@ async function startSearch() {
   const body = {};
   if (se.mode === 'pick') body.keywordIds = [...se.sel];
   if (se.countries.trim()) body.countries = se.countries.trim();
+  body.skipChat = se.skipChat;
   try {
     await api('/api/runs', { method: 'POST', body });
     toast('Busca iniciada.');
@@ -1309,6 +1315,7 @@ async function loadKeywords() {
   const d = await api('/api/keywords');
   S.keywords = d.rows;
   if (d.default_countries) S.defaultCountries = d.default_countries;
+  if (d.skip_chat !== undefined && !S.skipChatLoaded) { S.search.skipChat = d.skip_chat; S.skipChatLoaded = true; }
   await loadCountries();
 }
 
@@ -1425,8 +1432,9 @@ async function viewSettings() {
     const searchMode = h('select', { id: 's-smode' }, [['wide', 'Larga (recomendado)'], ['exact', 'Exata']].map(([v, l]) => h('option', { value: v, selected: s.search_mode === v }, l)));
     const prio = h('input', { type: 'checkbox', id: 's-prio', checked: s.prioritize === '1' });
     const autoRep = h('input', { type: 'checkbox', id: 's-arep', checked: s.auto_report === '1' });
+    const skipChatS = h('input', { type: 'checkbox', id: 's-skipchat', checked: s.skip_chat !== '0' });
     const save = h('button', { class: 'btn primary', onclick: async () => {
-      const body = { default_countries: countries.get() || 'ALL', schedule_mode: mode.value, schedule_time: time.value, search_mode: searchMode.value, prioritize: prio.checked, auto_report: autoRep.checked };
+      const body = { default_countries: countries.get() || 'ALL', schedule_mode: mode.value, schedule_time: time.value, search_mode: searchMode.value, prioritize: prio.checked, auto_report: autoRep.checked, skip_chat: skipChatS.checked };
       for (const [k, el] of Object.entries(inputs)) body[k] = el.value;
       try { await api('/api/settings', { method: 'PUT', body }); toast('Ajustes salvos.'); refreshCriteria(); } catch (ex) { toast(ex.message, true); }
     } }, 'Salvar ajustes');
@@ -1442,6 +1450,8 @@ async function viewSettings() {
           h('div', { class: 'hint' }, 'Larga: busca só pelos 2 primeiros termos e usa os outros como filtro no texto do anúncio. Traz mais páginas. Exata: busca com todos os termos.')),
         h('div', null, h('label', { class: 'chk', for: 's-prio' }, prio, 'Priorizar palavras que rendem'),
           h('div', { class: 'hint' }, 'Quando as buscas não cabem na rodada, vão primeiro as palavras nunca rodadas e as que mais trouxeram páginas boas.')),
+        h('div', null, h('label', { class: 'chk', for: 's-skipchat' }, skipChatS, 'Ignorar WhatsApp, Telegram e Linktree'),
+          h('div', { class: 'hint' }, 'Vale para buscas agendadas. Nas buscas manuais, a aba Busca tem a mesma opção.')),
         h('div', null, h('label', { class: 'chk', for: 's-arep' }, autoRep, 'Relatório diário em PDF'),
           h('div', { class: 'hint' }, 'Gera um PDF ao fim de cada rodada concluída.')))),
       backupBlock(),
