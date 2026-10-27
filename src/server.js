@@ -113,7 +113,7 @@ app.addHook('onRequest', async (req, reply) => {
   req.user = user;
 });
 
-app.get('/api/health', async () => ({ ok: true, storage: storageInfo(BOOT.boots), boots: BOOT.boots, data_since: BOOT.since }));
+app.get('/api/health', async () => ({ ok: true, storage: storageInfo(BOOT.boots), boots: BOOT.boots, data_since: BOOT.since, data_dir: config.dataDir }));
 
 app.get('/api/session', async (req) => {
   const u = resolveUser(req);
