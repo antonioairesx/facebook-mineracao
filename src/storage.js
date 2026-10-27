@@ -13,7 +13,7 @@ export function storageInfo() {
       const f = ln.split(' ');
       const mnt = (f[4] || '').replace(/\\040/g, ' ');
       if (!mnt) continue;
-      if (target === mnt || target.startsWith(mnt + '/')) {
+      if (target === mnt || mnt === '/' || target.startsWith(mnt + '/')) {
         if (!best || mnt.length > best.mnt.length) best = { mnt, root: f[3] || '' };
       }
     }
