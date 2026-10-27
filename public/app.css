@@ -492,3 +492,5 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 .hidden { display: none !important; }
 @media (max-width: 900px) { .searchgrid { grid-template-columns: 1fr; } .pickfilters { grid-template-columns: 1fr; } }
 .pad .log.short { margin: 14px 0 0; }
+
+.actrow { display: flex; align-items: center; justify-content: flex-end; gap: 2px; }

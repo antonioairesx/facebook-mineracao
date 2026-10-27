@@ -6,7 +6,7 @@ const S = {
   tab: 'inicio',
   defaultCountries: 'MX,CO,CL,PE',
   search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '' },
-  filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false },
+  filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false, hideChat: true },
   facets: { niches: [], tags: [], offers: [] },
   reports: [],
   alertDismissed: 0,
@@ -682,6 +682,7 @@ function queryString() {
   if (f.offer) p.set('offer', f.offer);
   if (f.tag) p.set('tag', f.tag);
   if (f.scaling) p.set('scaling', '1');
+  if (f.hideChat) p.set('hide_chat', '1');
   p.set('sort', S.sort);
   p.set('dir', S.dir);
   return p;
@@ -714,6 +715,8 @@ function viewPages() {
   only.addEventListener('change', () => { f.only = only.checked; loadPages(); });
   const scaling = h('input', { type: 'checkbox', id: 'f-scaling', checked: f.scaling });
   scaling.addEventListener('change', () => { f.scaling = scaling.checked; loadPages(); });
+  const hideChat = h('input', { type: 'checkbox', id: 'f-hidechat', checked: f.hideChat });
+  hideChat.addEventListener('change', () => { f.hideChat = hideChat.checked; loadPages(); });
   const niche = h('select', { id: 'f-niche' }, h('option', { value: '' }, 'Todos os nichos'));
   niche.addEventListener('change', () => { f.niche = niche.value; loadPages(); });
   const offer = h('select', { id: 'f-offer' }, h('option', { value: '' }, 'Todas as ofertas'));
@@ -749,7 +752,8 @@ function viewPages() {
       field('Etiqueta', tag, 'f-tag'),
       h('div', { class: 'checks' },
         h('label', { class: 'chk', for: 'f-only' }, only, 'Só os que passam no critério'),
-        h('label', { class: 'chk', for: 'f-scaling' }, scaling, 'Só escalando'))
+        h('label', { class: 'chk', for: 'f-scaling' }, scaling, 'Só escalando'),
+        h('label', { class: 'chk', for: 'f-hidechat' }, hideChat, 'Esconder WhatsApp, Telegram e Linktree'))
     ),
     h('div', { class: 'card tablecard' }, bulkBox, pagesBox)
   );
@@ -862,6 +866,7 @@ function paintTable() {
       ? h('a', { href: r.site_url || ('https://' + r.domain), target: '_blank', rel: 'noopener noreferrer', onclick: (e) => e.stopPropagation() }, r.domain + ' ', ic('external'))
       : h('span', { class: 'faint' }, '-');
     const kebab = h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Mais ações', onclick: (e) => { e.stopPropagation(); openRowMenu(kebab, r); } }, ic('more'));
+    const trash = r.status === 'discarded' ? null : h('button', { class: 'iconbtn', type: 'button', title: 'Descartar (não pertinente)', 'aria-label': 'Descartar ' + r.name, onclick: async (e) => { e.stopPropagation(); await setStatus(r, 'discarded'); loadPages(); } }, ic('trash'));
     const tr = h('tr', { class: (r.status === 'new' ? 'is-new ' : '') + (r.status === 'discarded' ? 'is-discarded' : ''), tabindex: '0', onclick: () => openDrawer(r.page_id) },
       h('td', { class: 'cb' }, cb),
       h('td', null, h('div', { class: 'pcell' }, avatar(r.name),
@@ -879,7 +884,7 @@ function paintTable() {
       h('td', null, site),
       h('td', null, h('div', { class: 'dim' }, ago(r.first_seen)), h('div', { class: 'countries' }, r.countries.map((c) => h('span', { class: 'cchip' }, c)))),
       h('td', null, pill),
-      h('td', { class: 'act' }, kebab)
+      h('td', { class: 'act' }, h('div', { class: 'actrow' }, trash, kebab))
     );
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') openDrawer(r.page_id); });
     tbody.append(tr);

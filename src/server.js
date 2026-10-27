@@ -329,6 +329,8 @@ function buildPagesQuery(query, { forExport = false } = {}) {
   if (query.offer) {
     where.push('offer_type = ?');
     params.push(String(query.offer));
+  } else if (query.hide_chat === '1') {
+    where.push("offer_type NOT IN ('whatsapp', 'linkhub')");
   }
   if (query.tag) {
     where.push('EXISTS (SELECT 1 FROM page_tags t WHERE t.page_id = page_id_x AND t.tag = ?)');

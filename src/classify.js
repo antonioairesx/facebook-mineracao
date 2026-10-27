@@ -8,13 +8,15 @@ export const OFFER_LABEL = {
   quiz: 'Quiz',
   vendas: 'Página de vendas',
   loja: 'Loja',
-  whatsapp: 'WhatsApp',
+  whatsapp: 'WhatsApp/Telegram',
+  linkhub: 'Linktree e similares',
   app: 'App',
   interno: 'Facebook/Instagram',
 };
 
-const PRIORITY = ['checkout', 'vsl', 'quiz', 'vendas', 'loja', 'whatsapp', 'app', 'interno'];
+const PRIORITY = ['checkout', 'vsl', 'quiz', 'vendas', 'loja', 'whatsapp', 'linkhub', 'app', 'interno'];
 
+const LINKHUB_HOST = /(^|\.)(linktr\.ee|linktree\.com|beacons\.ai|bio\.link|linkin\.bio|lnk\.bio|taplink\.(cc|at)|allmylinks\.com|campsite\.bio|solo\.to|linkr\.bio|hoo\.be|direct\.me|bio\.site|carrd\.co|stan\.store|msha\.ke|lnk\.to|linkpop\.com|withkoji\.com|tap\.bio|link\.bio|biolink\.[a-z.]+|linkfly\.[a-z.]+|bio\.fm|manylink\.co|many\.link|wa\.link|chat\.whatsapp\.com|t\.me|telegram\.me|telegram\.dog)$/i;
 const CHECKOUT_HOST = /(hotmart|kiwify|eduzz|monetizze|cartpanda|clickbank|buygoods|digistore24|cakto|payt\.|ticto|perfectpay|greenn|yampi|lastlink|doppus|braip|appmax|sunize|checkout|pay\.|pagar|stripe\.com|paypal)/i;
 const CHECKOUT_PATH = /\/(checkout|pay|payment|buy|order|cart|comprar|pagar|carrito)(\/|$|\?|-)/i;
 const VSL_PATH = /(\/vsl|\/video|\/watch|\/v\/|vsl[-_.]|\/webinar|\/masterclass|\/clase|\/presentacion)/i;
@@ -38,7 +40,8 @@ export function classifyAd(ad) {
   const cta = norm(ad.cta);
   const text = norm([ad.body, ad.title].filter(Boolean).join(' '));
 
-  if (/wa\.me|api\.whatsapp\.com|whatsapp\.com/.test(host) || /whatsapp/.test(cta)) return 'whatsapp';
+  if (/wa\.me|api\.whatsapp\.com|whatsapp\.com|wa\.link|(^|\.)t\.me$|telegram\.(me|dog)$/.test(host) || /whatsapp|telegram/.test(cta)) return 'whatsapp';
+  if (LINKHUB_HOST.test(host)) return 'linkhub';
   if (/(^|\.)m\.me$/.test(host) || /messenger/.test(cta)) return 'interno';
   if (/play\.google\.com|apps\.apple\.com|itunes\.apple\.com/.test(host)) return 'app';
   if (!host) return url ? 'interno' : '';
@@ -68,7 +71,7 @@ export function classifyPage(ads) {
   return best;
 }
 
-const OFFER_POINTS = { checkout: 10, vsl: 10, quiz: 10, vendas: 6, loja: 4, whatsapp: 3 };
+const OFFER_POINTS = { checkout: 10, vsl: 10, quiz: 10, vendas: 6, loja: 4, whatsapp: 1, linkhub: 1 };
 
 // 0 a 100. Pesos: anuncios ativos 35, dias 25, criativos distintos 15, novos nos ultimos 7 dias 10,
 // tipo de oferta 10, site identificado 5.
