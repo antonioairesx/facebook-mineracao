@@ -100,6 +100,16 @@ CREATE TABLE IF NOT EXISTS page_hits (
   PRIMARY KEY (page_id, term, country)
 );
 
+CREATE TABLE IF NOT EXISTS users (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  username TEXT NOT NULL UNIQUE COLLATE NOCASE,
+  pass_hash TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'member',
+  active INTEGER NOT NULL DEFAULT 1,
+  created_at INTEGER NOT NULL,
+  last_login_at INTEGER
+);
+
 CREATE INDEX IF NOT EXISTS idx_ads_page ON ads(page_id);
 CREATE INDEX IF NOT EXISTS idx_pages_status ON pages(status);
 CREATE INDEX IF NOT EXISTS idx_hits_term ON page_hits(term);

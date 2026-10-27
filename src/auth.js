@@ -19,9 +19,34 @@ export function passwordMatches(input) {
   return crypto.timingSafeEqual(sha(input), sha(config.adminPassword));
 }
 
-export function makeSession() {
+// ---- senhas de usuarios (scrypt com sal)
+export function hashPassword(password) {
+  const salt = crypto.randomBytes(16);
+  const key = crypto.scryptSync(String(password), salt, 32);
+  return `s1:${salt.toString('hex')}:${key.toString('hex')}`;
+}
+
+export function verifyPassword(password, stored) {
+  try {
+    const [tag, saltHex, keyHex] = String(stored).split(':');
+    if (tag !== 's1') return false;
+    const key = crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 32);
+    const want = Buffer.from(keyHex, 'hex');
+    return key.length === want.length && crypto.timingSafeEqual(key, want);
+  } catch {
+    return false;
+  }
+}
+
+// gasta o mesmo tempo quando o usuario nao existe (nao revela quem tem conta)
+export function fakeVerify(password) {
+  verifyPassword(password, 's1:00000000000000000000000000000000:' + '00'.repeat(32));
+}
+
+// uid 0 = admin definido pelas variaveis de ambiente. v amarra a sessao a versao da senha.
+export function makeSession(uid, v = '') {
   const exp = Date.now() + config.sessionHours * 3600 * 1000;
-  const payload = Buffer.from(JSON.stringify({ exp })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify({ exp, uid, v })).toString('base64url');
   return `${payload}.${sign(payload)}`;
 }
 
@@ -35,18 +60,19 @@ export function readCookie(header, name = COOKIE) {
   return '';
 }
 
-export function isValidSession(token) {
-  if (!token || !token.includes('.')) return false;
+export function readSession(token) {
+  if (!token || !token.includes('.')) return null;
   const [payload, sig] = token.split('.');
   const expected = sign(payload);
-  const a = Buffer.from(sig);
+  const a = Buffer.from(sig || '');
   const b = Buffer.from(expected);
-  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return false;
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) return null;
   try {
-    const { exp } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    return typeof exp === 'number' && exp > Date.now();
+    const { exp, uid, v } = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (typeof exp !== 'number' || exp <= Date.now() || !Number.isInteger(uid)) return null;
+    return { uid, v: typeof v === 'string' ? v : '' };
   } catch {
-    return false;
+    return null;
   }
 }
 

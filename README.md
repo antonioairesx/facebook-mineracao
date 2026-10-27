@@ -10,7 +10,8 @@ Voce cadastra palavras-chave, ele busca anuncios ativos por pais, abre a pagina 
 2. No EasyPanel, crie um **App** novo no projeto que preferir.
 3. Em **Source**, escolha GitHub e selecione o repositorio. Em **Build**, escolha **Dockerfile** (o arquivo ja esta na raiz).
 4. Em **Environment**, adicione:
-   - `ADMIN_PASSWORD` : senha do painel (minimo 8 caracteres). Sem ela o servidor nao sobe.
+   - `ADMIN_PASSWORD` : senha do administrador (minimo 8 caracteres). Sem ela o servidor nao sobe.
+   - `ADMIN_USER` : opcional, nome do administrador. Padrao: `admin`.
    - `SESSION_SECRET` : opcional, uma frase longa qualquer.
    - `TZ` : opcional, padrao `America/Sao_Paulo`.
    - `PROXY_SERVER`, `PROXY_USER`, `PROXY_PASS` : opcionais, so se o Facebook bloquear o IP da VPS.
@@ -27,6 +28,11 @@ Reserve cerca de 1 GB de memoria livre para o navegador interno.
 - **Rodadas**: historico, registro de cada rodada e arquivos de diagnostico.
 - **Palavras-chave**: cole uma lista (uma por linha, `+` entre termos), escolha idioma, nicho e paises.
 - **Ajustes**: criterio minimo, ritmo, paises padrao e agenda automatica.
+- **Conta**: troca da propria senha. O administrador cria os acessos dos amigos aqui, bloqueia, redefine senha e apaga.
+
+## Acessos
+
+O administrador entra com `ADMIN_USER` (padrao `admin`) e `ADMIN_PASSWORD`. Os amigos entram com o usuario e a senha criados por ele. Os dados sao compartilhados. Amigos veem a lista, favoritam, anotam e exportam CSV. Rodar, palavras-chave, ajustes e acessos sao so do administrador. Bloquear ou apagar um amigo derruba a sessao dele na hora.
 
 ## Se der bloqueio
 

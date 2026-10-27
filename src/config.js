@@ -5,6 +5,7 @@ const env = process.env;
 export const config = {
   port: Number(env.PORT || 3000),
   dataDir: path.resolve(env.DATA_DIR || './data'),
+  adminUser: (env.ADMIN_USER || 'admin').trim() || 'admin',
   adminPassword: env.ADMIN_PASSWORD || '',
   sessionSecret: env.SESSION_SECRET || '',
   timezone: env.TZ || 'America/Sao_Paulo',

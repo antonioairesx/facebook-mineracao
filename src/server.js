@@ -6,9 +6,12 @@ import { config, assertConfig } from './config.js';
 import { openDb, getSettings, setSettings, num, now, DEFAULT_SETTINGS } from './db.js';
 import {
   passwordMatches,
+  hashPassword,
+  verifyPassword,
+  fakeVerify,
   makeSession,
   readCookie,
-  isValidSession,
+  readSession,
   sessionCookie,
   clearCookie,
   loginBlocked,
@@ -51,8 +54,30 @@ app.addHook('onSend', async (req, reply) => {
   );
 });
 
-// ---------- autenticacao ----------
+// ---------- autenticacao e papeis ----------
 const OPEN_API = new Set(['/api/login', '/api/session', '/api/health']);
+
+function tokenTag(passHash) {
+  return String(passHash).slice(-12);
+}
+
+// devolve {id, username, role} ou null. Papel e status sempre vem do banco (revogar vale na hora).
+function resolveUser(req) {
+  const sess = readSession(readCookie(req.headers.cookie));
+  if (!sess) return null;
+  if (sess.uid === 0) return { id: 0, username: config.adminUser, role: 'admin', env: true };
+  const u = db.prepare('SELECT id, username, role, active, pass_hash FROM users WHERE id = ?').get(sess.uid);
+  if (!u || !u.active || sess.v !== tokenTag(u.pass_hash)) return null;
+  return { id: u.id, username: u.username, role: u.role, env: false };
+}
+
+// rotas so do admin: tudo que roda, apaga ou configura
+function adminOnly(method, url) {
+  if (url === '/api/users' || url.startsWith('/api/users/')) return true;
+  if (url === '/api/settings' || url.startsWith('/api/debug')) return true;
+  if (method !== 'GET' && (url.startsWith('/api/keywords') || url.startsWith('/api/runs'))) return true;
+  return false;
+}
 
 app.addHook('onRequest', async (req, reply) => {
   const url = req.url.split('?')[0];
@@ -61,34 +86,129 @@ app.addHook('onRequest', async (req, reply) => {
     return reply.code(403).send({ error: 'Requisicao recusada.' });
   }
   if (OPEN_API.has(url)) return;
-  if (!isValidSession(readCookie(req.headers.cookie))) {
-    return reply.code(401).send({ error: 'Sessao expirada. Entre de novo.' });
+  const user = resolveUser(req);
+  if (!user) return reply.code(401).send({ error: 'Sessao expirada. Entre de novo.' });
+  if (adminOnly(req.method, url) && user.role !== 'admin') {
+    return reply.code(403).send({ error: 'Somente o administrador pode fazer isso.' });
   }
+  req.user = user;
 });
 
 app.get('/api/health', async () => ({ ok: true }));
 
-app.get('/api/session', async (req) => ({
-  authenticated: isValidSession(readCookie(req.headers.cookie)),
-}));
+app.get('/api/session', async (req) => {
+  const u = resolveUser(req);
+  return { authenticated: !!u, user: u ? { username: u.username, role: u.role, env: u.env } : null };
+});
 
 app.post('/api/login', async (req, reply) => {
   const ip = req.ip;
   if (loginBlocked(ip)) {
     return reply.code(429).send({ error: 'Muitas tentativas. Aguarde 10 minutos.' });
   }
-  const password = req.body && typeof req.body.password === 'string' ? req.body.password : '';
-  if (!password || !passwordMatches(password)) {
+  const body = req.body || {};
+  const username = typeof body.username === 'string' ? body.username.trim() : '';
+  const password = typeof body.password === 'string' ? body.password : '';
+  const fail = () => {
     registerFailure(ip);
-    return reply.code(401).send({ error: 'Senha incorreta.' });
+    return reply.code(401).send({ error: 'Usuario ou senha incorretos.' });
+  };
+  if (!username || !password) return fail();
+
+  let token = null;
+  if (username.toLowerCase() === config.adminUser.toLowerCase()) {
+    if (!passwordMatches(password)) return fail();
+    token = makeSession(0);
+  } else {
+    const u = db.prepare('SELECT id, pass_hash, active FROM users WHERE username = ?').get(username);
+    if (!u) {
+      fakeVerify(password);
+      return fail();
+    }
+    if (!verifyPassword(password, u.pass_hash) || !u.active) return fail();
+    db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(now(), u.id);
+    token = makeSession(u.id, tokenTag(u.pass_hash));
   }
   registerSuccess(ip);
-  reply.header('Set-Cookie', sessionCookie(makeSession(), req.protocol === 'https'));
+  reply.header('Set-Cookie', sessionCookie(token, req.protocol === 'https'));
   return { ok: true };
 });
 
 app.post('/api/logout', async (req, reply) => {
   reply.header('Set-Cookie', clearCookie(req.protocol === 'https'));
+  return { ok: true };
+});
+
+// troca da propria senha (o admin das variaveis de ambiente troca la no EasyPanel)
+app.post('/api/me/password', async (req, reply) => {
+  if (req.user.env) {
+    return reply.code(400).send({ error: 'A senha do administrador e definida em ADMIN_PASSWORD no EasyPanel.' });
+  }
+  const { current, next } = req.body || {};
+  if (typeof next !== 'string' || next.length < 8 || next.length > 200) {
+    return reply.code(400).send({ error: 'A nova senha precisa ter de 8 a 200 caracteres.' });
+  }
+  const u = db.prepare('SELECT pass_hash FROM users WHERE id = ?').get(req.user.id);
+  if (!u || typeof current !== 'string' || !verifyPassword(current, u.pass_hash)) {
+    return reply.code(400).send({ error: 'Senha atual incorreta.' });
+  }
+  const hash = hashPassword(next);
+  db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hash, req.user.id);
+  // a sessao atual caiu junto com a troca: renova o cookie
+  reply.header('Set-Cookie', sessionCookie(makeSession(req.user.id, tokenTag(hash)), req.protocol === 'https'));
+  return { ok: true };
+});
+
+// ---------- usuarios (admin) ----------
+const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
+
+app.get('/api/users', async () => ({
+  admin: config.adminUser,
+  rows: db
+    .prepare('SELECT id, username, role, active, created_at, last_login_at FROM users ORDER BY username COLLATE NOCASE')
+    .all(),
+}));
+
+app.post('/api/users', async (req, reply) => {
+  const { username, password } = req.body || {};
+  if (typeof username !== 'string' || !USERNAME_RE.test(username.trim())) {
+    return reply.code(400).send({ error: 'Usuario de 3 a 30 caracteres: letras, numeros, ponto, hifen ou sublinhado.' });
+  }
+  if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
+    return reply.code(400).send({ error: 'A senha precisa ter de 8 a 200 caracteres.' });
+  }
+  const name = username.trim();
+  if (name.toLowerCase() === config.adminUser.toLowerCase()) {
+    return reply.code(400).send({ error: 'Esse nome e reservado para o administrador.' });
+  }
+  if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) {
+    return reply.code(409).send({ error: 'Ja existe um usuario com esse nome.' });
+  }
+  const info = db
+    .prepare("INSERT INTO users(username, pass_hash, role, active, created_at) VALUES (?, ?, 'member', 1, ?)")
+    .run(name, hashPassword(password), now());
+  return { ok: true, id: Number(info.lastInsertRowid) };
+});
+
+app.patch('/api/users/:id', async (req, reply) => {
+  const id = Number(req.params.id);
+  const u = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
+  if (!u) return reply.code(404).send({ error: 'Usuario nao encontrado.' });
+  const body = req.body || {};
+  if (body.active !== undefined) {
+    db.prepare('UPDATE users SET active = ? WHERE id = ?').run(body.active ? 1 : 0, id);
+  }
+  if (body.password !== undefined) {
+    if (typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 200) {
+      return reply.code(400).send({ error: 'A senha precisa ter de 8 a 200 caracteres.' });
+    }
+    db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(body.password), id);
+  }
+  return { ok: true };
+});
+
+app.delete('/api/users/:id', async (req) => {
+  db.prepare('DELETE FROM users WHERE id = ?').run(Number(req.params.id));
   return { ok: true };
 });
 

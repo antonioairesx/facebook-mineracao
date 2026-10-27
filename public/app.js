@@ -18,7 +18,9 @@ const S = {
   status: null,
   pollTimer: null,
   openPage: null,
+  user: null,
 };
+const isAdmin = () => !!(S.user && S.user.role === 'admin');
 
 /* ---------- utilidades ---------- */
 function h(tag, attrs, ...kids) {
@@ -110,9 +112,11 @@ const RUN_LABEL = { concluida: 'concluida', bloqueada: 'bloqueada', erro: 'erro'
 /* ---------- login ---------- */
 function renderLogin() {
   root.replaceChildren();
-  const pass = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password', autofocus: true });
+  const user = h('input', { type: 'text', id: 'un', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false' });
+  const pass = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password' });
   const err = h('div', { class: 'err', role: 'alert' });
   const form = h('form', { class: 'login-form' },
+    h('div', null, h('label', { class: 'lbl', for: 'un' }, 'Usuario'), user),
     h('div', null, h('label', { class: 'lbl', for: 'pw' }, 'Senha'), pass),
     err,
     h('button', { class: 'btn primary', type: 'submit' }, 'Entrar')
@@ -121,7 +125,7 @@ function renderLogin() {
     e.preventDefault();
     err.textContent = '';
     try {
-      await api('/api/login', { method: 'POST', body: { password: pass.value } });
+      await api('/api/login', { method: 'POST', body: { username: user.value, password: pass.value } });
       await boot();
     } catch (ex) {
       err.textContent = ex.message;
@@ -138,28 +142,30 @@ function renderLogin() {
       h('div', { class: 'login-form-wrap' }, form)
     )
   );
-  pass.focus();
+  user.focus();
 }
 
 /* ---------- casca ---------- */
 let viewEl = null;
 let runstateEl = null;
 let runBtn = null;
-const TABS = [['paginas', 'Paginas'], ['rodadas', 'Rodadas'], ['palavras', 'Palavras-chave'], ['ajustes', 'Ajustes']];
+const TABS_ALL = [['paginas', 'Paginas', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
+const tabsFor = () => TABS_ALL.filter(([, , adminOnly]) => !adminOnly || isAdmin());
 
 function renderShell() {
   root.replaceChildren();
   const tabs = h('div', { class: 'tabs', role: 'tablist' },
-    TABS.map(([id, label]) =>
+    tabsFor().map(([id, label]) =>
       h('button', { class: 'tab', role: 'tab', 'aria-selected': String(S.tab === id), 'data-tab': id, onclick: () => setTab(id) }, label)
     )
   );
   runstateEl = h('div', { class: 'runstate' });
-  runBtn = h('button', { class: 'btn primary', onclick: onRunClick }, 'Rodar agora');
+  runBtn = isAdmin() ? h('button', { class: 'btn primary', onclick: onRunClick }, 'Rodar agora') : null;
   const top = h('header', { class: 'top' },
     h('div', { class: 'logo' }, svgLogo(), h('span', null, 'Garimpo')),
     tabs,
     h('div', { class: 'top-right' }, runstateEl, runBtn,
+      h('span', { class: 'faint', style: null }, S.user ? S.user.username : ''),
       h('button', { class: 'btn ghost small', onclick: logout }, 'Sair'))
   );
   viewEl = h('main');
@@ -185,8 +191,9 @@ function renderTab() {
   viewEl.replaceChildren();
   if (S.tab === 'paginas') viewPages();
   else if (S.tab === 'rodadas') viewRuns();
-  else if (S.tab === 'palavras') viewKeywords();
-  else viewSettings();
+  else if (S.tab === 'palavras' && isAdmin()) viewKeywords();
+  else if (S.tab === 'ajustes' && isAdmin()) viewSettings();
+  else viewAccount();
 }
 
 /* ---------- estado da rodada ---------- */
@@ -199,16 +206,14 @@ function paintRunState() {
       h('span', { class: 'dot on' }),
       h('span', { class: 'msg num' }, (st.phase ? st.phase + ' ' : '') + st.done + '/' + st.total + (st.message ? ' ' + st.message : ''))
     );
-    runBtn.textContent = 'Parar';
-    runBtn.className = 'btn danger';
+    if (runBtn) { runBtn.textContent = 'Parar'; runBtn.className = 'btn danger'; }
   } else {
     const lr = st.last_run;
     runstateEl.append(
       h('span', { class: 'dot' }),
       h('span', { class: 'msg' }, lr ? 'Ultima rodada ' + ago(lr.finished_at || lr.started_at) + ' (' + (RUN_LABEL[lr.status] || lr.status) + ')' : 'Nenhuma rodada ainda')
     );
-    runBtn.textContent = 'Rodar agora';
-    runBtn.className = 'btn primary';
+    if (runBtn) { runBtn.textContent = 'Rodar agora'; runBtn.className = 'btn primary'; }
   }
 }
 
@@ -240,6 +245,7 @@ async function onRunClick() {
       toast('Pedido de parada enviado.');
     } else {
       const active = S.keywords.length ? S.keywords.filter((k) => k.active).length : null;
+      if (!isAdmin()) return;
       if (active === 0) { toast('Nenhuma palavra-chave ativa. Cadastre na aba Palavras-chave.', true); return; }
       await api('/api/runs', { method: 'POST', body: {} });
       toast('Rodada iniciada.');
@@ -555,7 +561,7 @@ function adRow(a) {
 /* ---------- rodadas ---------- */
 async function loadRuns() {
   try {
-    const [r, dbg] = await Promise.all([api('/api/runs'), api('/api/debug')]);
+    const [r, dbg] = await Promise.all([api('/api/runs'), isAdmin() ? api('/api/debug') : Promise.resolve({ rows: [] })]);
     S.runs = r.rows;
     paintRuns(dbg.rows);
   } catch (ex) { toast(ex.message, true); }
@@ -734,9 +740,92 @@ async function refreshCriteria() {
   try { const d = await api('/api/pages?limit=1'); S.criteria = d.criteria; } catch { /* ignora */ }
 }
 
+/* ---------- conta e acessos ---------- */
+function viewAccount() {
+  const wrap = h('div', { class: 'settings' });
+  viewEl.append(wrap);
+
+  if (S.user && S.user.env) {
+    wrap.append(h('fieldset', null, h('h2', { class: 'sec' }, 'Sua conta'),
+      h('div', { class: 'hint' }, 'Voce entra como administrador (' + S.user.username + '). A senha dele e definida na variavel ADMIN_PASSWORD no EasyPanel.')));
+  } else {
+    const cur = h('input', { type: 'password', id: 'pw-cur', autocomplete: 'current-password' });
+    const nxt = h('input', { type: 'password', id: 'pw-new', autocomplete: 'new-password' });
+    const btn = h('button', { class: 'btn primary', onclick: async () => {
+      try {
+        await api('/api/me/password', { method: 'POST', body: { current: cur.value, next: nxt.value } });
+        cur.value = ''; nxt.value = '';
+        toast('Senha trocada.');
+      } catch (ex) { toast(ex.message, true); }
+    } }, 'Trocar senha');
+    wrap.append(h('fieldset', null, h('h2', { class: 'sec' }, 'Sua conta (' + (S.user ? S.user.username : '') + ')'),
+      h('div', { class: 'fgrid' },
+        h('div', null, h('label', { class: 'lbl', for: 'pw-cur' }, 'Senha atual'), cur),
+        h('div', null, h('label', { class: 'lbl', for: 'pw-new' }, 'Nova senha (minimo 8)'), nxt)),
+      h('div', { style: null, class: 'hint' }, ' '), btn));
+  }
+
+  if (!isAdmin()) return;
+  const box = h('div');
+  wrap.append(h('fieldset', null, h('h2', { class: 'sec' }, 'Acessos'), box));
+  loadUsers(box);
+}
+
+async function loadUsers(box) {
+  try {
+    const d = await api('/api/users');
+    box.replaceChildren();
+    const un = h('input', { type: 'text', id: 'nu-user', autocapitalize: 'none', spellcheck: 'false', placeholder: 'ex: joao' });
+    const pw = h('input', { type: 'text', id: 'nu-pass', autocomplete: 'off', placeholder: 'minimo 8 caracteres' });
+    const add = h('button', { class: 'btn primary', onclick: async () => {
+      try {
+        await api('/api/users', { method: 'POST', body: { username: un.value, password: pw.value } });
+        toast('Usuario criado. Passe o usuario e a senha para a pessoa.');
+        loadUsers(box);
+      } catch (ex) { toast(ex.message, true); }
+    } }, 'Criar usuario');
+    box.append(
+      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar e exportar. Rodar, palavras-chave, ajustes e acessos ficam so com voce (' + d.admin + ').'),
+      h('div', { class: 'fgrid', style: null },
+        h('div', null, h('label', { class: 'lbl', for: 'nu-user' }, 'Usuario'), un),
+        h('div', null, h('label', { class: 'lbl', for: 'nu-pass' }, 'Senha inicial'), pw)),
+      h('div', { class: 'actions' }, add)
+    );
+    if (!d.rows.length) { box.append(h('div', { class: 'hint' }, 'Nenhum amigo cadastrado ainda.')); return; }
+    const tbody = h('tbody');
+    for (const u of d.rows) {
+      const on = h('input', { type: 'checkbox', checked: !!u.active, 'aria-label': 'Ativo: ' + u.username });
+      on.addEventListener('change', async () => {
+        try { await api('/api/users/' + u.id, { method: 'PATCH', body: { active: on.checked } }); toast(on.checked ? 'Acesso liberado.' : 'Acesso bloqueado.'); }
+        catch (ex) { toast(ex.message, true); on.checked = !on.checked; }
+      });
+      const reset = h('button', { class: 'btn small', onclick: async () => {
+        const np = prompt('Nova senha para ' + u.username + ' (minimo 8 caracteres):');
+        if (!np) return;
+        try { await api('/api/users/' + u.id, { method: 'PATCH', body: { password: np } }); toast('Senha redefinida.'); } catch (ex) { toast(ex.message, true); }
+      } }, 'Redefinir senha');
+      const del = h('button', { class: 'btn small danger', onclick: async () => {
+        if (!confirm('Apagar o usuario ' + u.username + '?')) return;
+        try { await api('/api/users/' + u.id, { method: 'DELETE' }); loadUsers(box); } catch (ex) { toast(ex.message, true); }
+      } }, 'Apagar');
+      tbody.append(h('tr', { style: null },
+        h('td', null, h('div', { class: 'pname' }, u.username), h('div', { class: 'pmeta' }, 'ultimo acesso: ' + (u.last_login_at ? ago(u.last_login_at) : 'nunca'))),
+        h('td', null, on),
+        h('td', null, h('div', { class: 'actions', style: null }, reset, del))
+      ));
+    }
+    box.append(h('div', { class: 'tablewrap' }, h('table', { style: null },
+      h('thead', null, h('tr', null, h('th', null, 'Usuario'), h('th', null, 'Ativo'), h('th', null, ''))), tbody)));
+  } catch (ex) { toast(ex.message, true); }
+}
+
 /* ---------- partida ---------- */
 async function boot() {
   try {
+    const sess = await (await fetch('/api/session', { credentials: 'same-origin' })).json();
+    if (!sess.authenticated) { renderLogin(); return; }
+    S.user = sess.user;
+    S.tab = 'paginas';
     await loadKeywords();
     S.status = await api('/api/status');
     renderShell();
