@@ -737,9 +737,21 @@ app.get('/api/runs/:id', async (req, reply) => {
   return row;
 });
 
+// filtros da tela Busca valem so para a rodada (nao mexem nos Ajustes)
+function runOverrides(body) {
+  const o = {};
+  if (!body) return o;
+  const ads = Number(body.min_ads);
+  if (body.min_ads !== undefined && body.min_ads !== '' && Number.isFinite(ads) && ads >= 1 && ads <= 1000) o.min_ads = String(Math.floor(ads));
+  const days = Number(body.min_days);
+  if (body.min_days !== undefined && body.min_days !== '' && Number.isFinite(days) && days >= 0 && days <= 3650) o.min_days = String(Math.floor(days));
+  if (['wide', 'exact'].includes(body.search_mode)) o.search_mode = body.search_mode;
+  return o;
+}
+
 app.post('/api/runs', async (req, reply) => {
   const ids = req.body && Array.isArray(req.body.keywordIds) ? req.body.keywordIds : null;
-  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries, skipChat: req.body && req.body.skipChat !== undefined ? !!req.body.skipChat : null });
+  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries, skipChat: req.body && req.body.skipChat !== undefined ? !!req.body.skipChat : null, overrides: runOverrides(req.body) });
   if (!res.ok) return reply.code(409).send({ error: res.error });
   return res;
 });

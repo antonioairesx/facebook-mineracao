@@ -96,7 +96,7 @@ function stamp() {
   return new Date().toLocaleTimeString('pt-BR', { timeZone: config.timezone, hour12: false });
 }
 
-export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null, skipChat = null } = {}) {
+export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null, skipChat = null, overrides = null } = {}) {
   if (state.running) return { ok: false, error: 'Já existe uma rodada em andamento.' };
   const d = openDb();
 
@@ -115,6 +115,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
     const searches = plan.map(([id, country]) => ({ kw: kwById.get(id), country })).filter((x) => x.kw);
     d.prepare("UPDATE runs SET status = 'rodando', finished_at = NULL, error = NULL WHERE id = ?").run(run.id);
     state.skipChat = skipChat === null || skipChat === undefined ? getSettings().skip_chat !== '0' : !!skipChat;
+    state.overrides = {};
     state.running = true;
     state.runId = run.id;
     state.stop = false;
@@ -141,6 +142,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
     .run(now(), trigger);
   const runId = Number(info.lastInsertRowid);
   state.skipChat = skipChat === null || skipChat === undefined ? getSettings().skip_chat !== '0' : !!skipChat;
+  state.overrides = overrides || {};
   state.running = true;
   state.runId = runId;
   state.stop = false;
@@ -158,7 +160,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
 
 async function runMining(runId, { keywords = [], specific = false, override = [], searches: resumeSearches = null, resume = null } = {}) {
   const d = openDb();
-  const settings = getSettings();
+  const settings = { ...getSettings(), ...(state.overrides || {}) };
   const startedAt = state.startedAt;
   const lines = resume && resume.log ? resume.log.split('\n') : [];
   const counters = resume

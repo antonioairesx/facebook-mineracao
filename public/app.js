@@ -5,7 +5,7 @@ const toastEl = document.getElementById('toast');
 const S = {
   tab: 'inicio',
   defaultCountries: 'ALL',
-  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '', skipChat: true },
+  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '', skipChat: true, minAds: '', minDays: '', smode: '' },
   filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false, hideChat: true },
   facets: { niches: [], tags: [], offers: [] },
   reports: [],
@@ -585,6 +585,13 @@ function viewSearch() {
   const modeNote = h('div', { class: 'hint' });
   const pickBox = h('div', { class: 'pickbox' });
   const countries = countryPicker({ id: 'b-countries', value: se.countries, placeholder: 'Vazio usa os padrão (' + codesOf(S.defaultCountries).map(countryName).join(', ') + ')', onChange: (v) => { se.countries = v; paintPreview(); } });
+  const crit = S.criteria || {};
+  const minAdsIn = h('input', { type: 'number', min: '1', id: 'b-minads', placeholder: crit.min_ads ? 'padrão ' + crit.min_ads : 'padrão', value: se.minAds });
+  minAdsIn.addEventListener('input', () => { se.minAds = minAdsIn.value; });
+  const minDaysIn = h('input', { type: 'number', min: '0', id: 'b-mindays', placeholder: crit.min_days ? 'padrão ' + crit.min_days : 'padrão', value: se.minDays });
+  minDaysIn.addEventListener('input', () => { se.minDays = minDaysIn.value; });
+  const smodeIn = h('select', { id: 'b-smode' }, [['', 'Padrão dos Ajustes'], ['wide', 'Larga (traz mais páginas)'], ['exact', 'Exata (todos os termos)']].map(([v, l]) => h('option', { value: v, selected: se.smode === v }, l)));
+  smodeIn.addEventListener('change', () => { se.smode = smodeIn.value; });
   const skipChat = h('input', { type: 'checkbox', id: 'b-skipchat', checked: se.skipChat });
   skipChat.addEventListener('change', () => { se.skipChat = skipChat.checked; });
   searchPreview = h('div', { class: 'preview' });
@@ -636,6 +643,11 @@ function viewSearch() {
     h('h2', { class: 'sec' }, 'Nova busca'),
     seg, modeNote, pickBox,
     h('div', null, h('label', { class: 'lbl', for: 'b-countries' }, 'Países (opcional)'), countries.el),
+    h('div', { class: 'fgrid' },
+      h('div', null, h('label', { class: 'lbl', for: 'b-minads' }, 'Anúncios ativos (mín.)'), minAdsIn),
+      h('div', null, h('label', { class: 'lbl', for: 'b-mindays' }, 'Dias no ar (mín.)'), minDaysIn),
+      h('div', null, h('label', { class: 'lbl', for: 'b-smode' }, 'Modo de busca'), smodeIn)),
+    h('div', { class: 'hint' }, 'Mínimos de anúncios e dias decidem quais páginas ganham a análise detalhada. Vazio usa o padrão dos Ajustes. Valem só para esta busca.'),
     h('div', null,
       h('label', { class: 'chk', for: 'b-skipchat' }, skipChat, 'Ignorar anúncios com link para WhatsApp, Telegram e Linktree'),
       h('div', { class: 'hint' }, 'Esses anúncios não entram na busca nem na contagem. Páginas que só têm esse tipo de anúncio são descartadas.')),
@@ -661,6 +673,9 @@ async function startSearch() {
   if (se.mode === 'pick') body.keywordIds = [...se.sel];
   if (se.countries.trim()) body.countries = se.countries.trim();
   body.skipChat = se.skipChat;
+  if (se.minAds) body.min_ads = se.minAds;
+  if (se.minDays !== '') body.min_days = se.minDays;
+  if (se.smode) body.search_mode = se.smode;
   try {
     await api('/api/runs', { method: 'POST', body });
     toast('Busca iniciada.');
