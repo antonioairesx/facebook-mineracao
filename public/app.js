@@ -1,4 +1,4 @@
-// Painel Garimpo. Sem build, sem dependencias. Todo texto vindo da biblioteca entra via textContent.
+// Painel AdHunter. Sem build, sem dependencias. Todo texto vindo da biblioteca entra via textContent.
 const root = document.getElementById('root');
 const toastEl = document.getElementById('toast');
 
@@ -53,6 +53,9 @@ const ICONS = {
   logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
   sun: ['M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z', 'M12 2v2', 'M12 20v2', 'm4.93 4.93 1.41 1.41', 'm17.66 17.66 1.41 1.41', 'M2 12h2', 'M20 12h2', 'm6.34 17.66-1.41 1.41', 'm19.07 4.93-1.41 1.41'],
   moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
+  user: ['M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2', 'M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z'],
+  lock: ['M5 11h14a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1Z', 'M8 11V7a4 4 0 0 1 8 0v4'],
+  arrow: ['M5 12h14', 'm12 5 7 7-7 7'],
   eye: ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z', 'M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'],
   star: ['m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z'],
   trash: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
@@ -121,17 +124,10 @@ function avatar(name) {
 }
 
 function svgLogo() {
-  const ns = 'http://www.w3.org/2000/svg';
-  const s = document.createElementNS(ns, 'svg');
-  s.setAttribute('viewBox', '0 0 32 32');
-  const bars = [[7, 17, 8], [14, 11, 14], [21, 6, 19]];
-  for (const [x, y, hh] of bars) {
-    const r = document.createElementNS(ns, 'rect');
-    r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', 4); r.setAttribute('height', hh);
-    r.setAttribute('rx', 1); r.style.fill = 'var(--link)';
-    s.append(r);
-  }
-  return s;
+  return h('img', { class: 'logo-img', src: '/logo.png', alt: '', width: '32', height: '32' });
+}
+function wordmark() {
+  return h('span', { class: 'wordmark' }, 'Ad', h('b', null, 'Hunter'));
 }
 
 let toastTimer = null;
@@ -191,34 +187,54 @@ const RUN_LABEL = { concluida: 'Concluída', bloqueada: 'Bloqueada', erro: 'Erro
 /* ---------- login ---------- */
 function renderLogin() {
   root.replaceChildren();
-  const user = h('input', { type: 'text', id: 'un', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false' });
-  const pass = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password' });
+  const user = h('input', { type: 'text', id: 'un', autocomplete: 'username', autocapitalize: 'none', spellcheck: 'false', placeholder: 'Digite seu usuário' });
+  const pass = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password', placeholder: 'Digite sua senha' });
+  const eye = h('button', { class: 'eyebtn', type: 'button', 'aria-label': 'Mostrar senha' }, ic('eye'));
+  eye.addEventListener('click', () => {
+    const show = pass.type === 'password';
+    pass.type = show ? 'text' : 'password';
+    eye.setAttribute('aria-label', show ? 'Ocultar senha' : 'Mostrar senha');
+  });
   const err = h('div', { class: 'err', role: 'alert' });
+  const submit = h('button', { class: 'btn primary big', type: 'submit' }, 'Entrar', ic('arrow'));
   const form = h('form', { class: 'login-form' },
-    h('div', null, h('label', { class: 'lbl', for: 'un' }, 'Usuário'), user),
-    h('div', null, h('label', { class: 'lbl', for: 'pw' }, 'Senha'), pass),
+    h('div', null, h('label', { class: 'lbl', for: 'un' }, 'Usuário'), h('div', { class: 'fieldicon' }, ic('user'), user)),
+    h('div', null, h('label', { class: 'lbl', for: 'pw' }, 'Senha'), h('div', { class: 'fieldicon' }, ic('lock'), pass, eye)),
     err,
-    h('button', { class: 'btn primary', type: 'submit' }, 'Entrar')
+    submit
   );
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     err.textContent = '';
+    submit.disabled = true;
     try {
       await api('/api/login', { method: 'POST', body: { username: user.value, password: pass.value } });
       await boot();
     } catch (ex) {
       err.textContent = ex.message;
+      submit.disabled = false;
       pass.select();
     }
   });
   root.append(
     h('div', { class: 'login' },
       h('div', { class: 'login-side' },
-        h('div', { class: 'login-brand' }, svgLogo(), 'Garimpo', h('span', { style: null, class: 'faint' }, ' '), themeButton()),
-        h('h1', { class: 'login-title' }, 'Quem anuncia ', h('span', null, 'de verdade'), '.'),
-        h('p', { class: 'login-note' }, 'Anunciantes da Biblioteca de Anúncios, ordenados por quantos anúncios ativos têm e há quantos dias rodam.')
+        h('div', { class: 'login-hero' },
+          h('img', { class: 'login-logo', src: '/logo.png', alt: '', width: '200', height: '200' }),
+          h('div', { class: 'login-word' }, 'Ad', h('b', null, 'Hunter')),
+          h('p', { class: 'login-tag' }, 'Encontre anunciantes de verdade.'),
+          h('p', { class: 'login-note' }, 'Páginas, anúncios e oportunidades para você ir direto ao que funciona.')
+        )
       ),
-      h('div', { class: 'login-form-wrap' }, form)
+      h('div', { class: 'login-form-wrap' },
+        h('div', { class: 'login-card' },
+          h('div', { class: 'login-theme' }, themeButton()),
+          h('img', { class: 'login-card-logo', src: '/logo.png', alt: '', width: '84', height: '84' }),
+          h('h1', { class: 'login-h' }, 'Acesse sua conta'),
+          h('p', { class: 'login-sub' }, 'Entre para continuar no AdHunter'),
+          form
+        )
+      )
     )
   );
   user.focus();
@@ -242,7 +258,7 @@ function renderShell() {
   runstateEl = h('div', { class: 'runstate' });
   runBtn = isAdmin() ? h('button', { class: 'btn primary', onclick: onRunClick }) : null;
   const top = h('header', { class: 'top' },
-    h('div', { class: 'logo' }, svgLogo(), h('span', null, 'Garimpo')),
+    h('div', { class: 'logo' }, svgLogo(), wordmark()),
     tabs,
     h('div', { class: 'top-right' }, runstateEl, runBtn,
       h('span', { class: 'who' }, S.user ? S.user.username : ''),

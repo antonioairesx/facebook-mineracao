@@ -158,20 +158,44 @@ label.lbl { display: block; font-size: 13px; color: var(--dim); margin-bottom: 6
 .pad { padding: 20px; }
 
 /* login */
-.login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-.login-side { padding: 8vh 6vw; display: flex; flex-direction: column; justify-content: space-between; background: var(--surface); border-right: 1px solid var(--line); gap: 40px; }
-.login-brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 18px; }
-.login-brand svg { width: 26px; height: 26px; }
-.login-title { font-size: clamp(34px, 5vw, 56px); line-height: 1.05; font-weight: 700; letter-spacing: -.02em; margin: 0; max-width: 11ch; }
-.login-title span { color: var(--link); }
-.login-note { color: var(--dim); max-width: 38ch; margin: 0; }
-.login-form-wrap { padding: 8vh 6vw; display: flex; align-items: center; }
-.login-form { width: 100%; max-width: 360px; display: grid; gap: 16px; }
+.login { min-height: 100vh; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); }
+.login-side {
+  display: flex; align-items: center; justify-content: center; padding: 8vh 6vw; color: #fff;
+  background:
+    radial-gradient(120% 90% at 0% 100%, oklch(0.42 0.17 258) 0%, transparent 60%),
+    radial-gradient(90% 70% at 100% 0%, oklch(0.36 0.13 255) 0%, transparent 55%),
+    oklch(0.2 0.06 258);
+}
+.login-hero { text-align: center; max-width: 440px; }
+.login-logo { width: clamp(120px, 16vw, 200px); height: auto; display: block; margin: 0 auto 18px; }
+.login-word { font-size: clamp(44px, 6vw, 72px); font-weight: 700; letter-spacing: -.03em; line-height: 1; }
+.login-word b { color: oklch(0.68 0.19 252); font-weight: 700; }
+.login-tag { font-size: clamp(18px, 2vw, 22px); margin: 22px 0 8px; font-weight: 500; }
+.login-note { color: oklch(0.82 0.04 255); margin: 0 auto; max-width: 32ch; }
+.login-form-wrap { padding: 6vh 6vw; display: flex; align-items: center; justify-content: center; background: var(--bg); }
+.login-card { position: relative; width: 100%; max-width: 440px; background: var(--surface); border: 1px solid var(--line); border-radius: 22px; box-shadow: var(--shadow); padding: 40px 36px 36px; text-align: center; }
+.login-theme { position: absolute; top: 14px; right: 14px; }
+.login-card-logo { width: 84px; height: auto; display: block; margin: 0 auto 10px; }
+.login-h { font-size: 28px; line-height: 1.15; margin: 8px 0 6px; letter-spacing: -.02em; }
+.login-sub { color: var(--dim); margin: 0 0 26px; }
+.login-form { width: 100%; display: grid; gap: 16px; text-align: left; }
+.login-form .eyebtn { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); background: none; border: 0; color: var(--faint); cursor: pointer; padding: 8px; border-radius: 8px; display: grid; place-items: center; }
+.login-form .eyebtn:hover { color: var(--text); background: var(--sunk); }
+.login-form .eyebtn .ic { position: static; transform: none; pointer-events: none; color: inherit; }
+.login-form .fieldicon input { padding-right: 44px; }
+.btn.big { height: 50px; font-size: 16px; border-radius: 12px; gap: 10px; justify-content: center; }
+.btn.big .ic { width: 18px; height: 18px; }
 .err { color: var(--bad); min-height: 20px; font-size: 14px; }
 @media (max-width: 760px) {
   .login { grid-template-columns: 1fr; }
-  .login-side { border-right: 0; border-bottom: 1px solid var(--line); padding: 28px 20px; }
-  .login-form-wrap { padding: 24px 20px 40px; }
+  .login-side { padding: 36px 20px; }
+  .login-logo { width: 96px; margin-bottom: 10px; }
+  .login-word { font-size: 40px; }
+  .login-tag { margin-top: 14px; }
+  .login-note { display: none; }
+  .login-card-logo { display: none; }
+  .login-form-wrap { padding: 20px 16px 40px; }
+  .login-card { padding: 32px 22px 28px; }
 }
 
 /* cabecalho */
@@ -180,7 +204,9 @@ label.lbl { display: block; font-size: 13px; color: var(--dim); margin-bottom: 6
   border-bottom: 1px solid var(--line); background: var(--surface); position: sticky; top: 0; z-index: 20;
 }
 .logo { font-weight: 700; letter-spacing: -.01em; font-size: 20px; display: flex; align-items: center; gap: 10px; padding-right: 18px; border-right: 1px solid var(--line); height: 36px; }
-.logo svg { width: 26px; height: 26px; }
+.logo-img { width: 38px; height: 38px; object-fit: contain; display: block; }
+.wordmark { font-weight: 700; letter-spacing: -.02em; }
+.wordmark b { color: var(--link); font-weight: 700; }
 .tabs { display: flex; gap: 4px; height: 100%; }
 .tab { background: none; border: 0; border-bottom: 3px solid transparent; padding: 0 14px; cursor: pointer; color: var(--dim); height: 100%; font-weight: 500; margin-bottom: -1px; }
 .tab:hover { color: var(--text); }

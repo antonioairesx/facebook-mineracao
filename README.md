@@ -1,4 +1,4 @@
-# Garimpo
+# AdHunter
 
 Minerador da Biblioteca de Anuncios do Facebook/Meta com painel. Roda no seu servidor, sem custo de ferramenta paga.
 

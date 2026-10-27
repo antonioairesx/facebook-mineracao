@@ -33,7 +33,8 @@ const STATIC = {
   '/app.css': ['app.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
   '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
-  '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
+  '/favicon.png': ['favicon.png', 'image/png'],
+  '/logo.png': ['logo.png', 'image/png'],
 };
 
 const STATUSES = ['new', 'seen', 'fav', 'discarded'];
@@ -425,7 +426,7 @@ app.get('/api/export.csv', async (req, reply) => {
   );
   reply
     .header('Content-Type', 'text/csv; charset=utf-8')
-    .header('Content-Disposition', `attachment; filename="garimpo-${new Date().toISOString().slice(0, 10)}.csv"`);
+    .header('Content-Disposition', `attachment; filename="adhunter-${new Date().toISOString().slice(0, 10)}.csv"`);
   return csv;
 });
 
@@ -671,7 +672,7 @@ app.get('/*', async (req, reply) => {
 startScheduler();
 
 app.listen({ port: config.port, host: '0.0.0.0' }).then(() => {
-  console.log(`Garimpo no ar na porta ${config.port}`);
+  console.log(`AdHunter no ar na porta ${config.port}`);
 });
 
 export default app;
