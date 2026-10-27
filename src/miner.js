@@ -96,7 +96,7 @@ function stamp() {
   return new Date().toLocaleTimeString('pt-BR', { timeZone: config.timezone, hour12: false });
 }
 
-export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null, skipChat = null, overrides = null } = {}) {
+export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null, countries = null, skipChat = null, overrides = null, target = null } = {}) {
   if (state.running) return { ok: false, error: 'Já existe uma rodada em andamento.' };
   const d = openDb();
 
@@ -116,6 +116,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
     d.prepare("UPDATE runs SET status = 'rodando', finished_at = NULL, error = NULL WHERE id = ?").run(run.id);
     state.skipChat = skipChat === null || skipChat === undefined ? getSettings().skip_chat !== '0' : !!skipChat;
     state.overrides = {};
+    state.target = 0;
     state.running = true;
     state.runId = run.id;
     state.stop = false;
@@ -143,6 +144,7 @@ export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = 
   const runId = Number(info.lastInsertRowid);
   state.skipChat = skipChat === null || skipChat === undefined ? getSettings().skip_chat !== '0' : !!skipChat;
   state.overrides = overrides || {};
+  state.target = Number.isFinite(Number(target)) && Number(target) >= 1 ? Math.min(Math.floor(Number(target)), 5000) : 0;
   state.running = true;
   state.runId = runId;
   state.stop = false;
@@ -162,6 +164,25 @@ async function runMining(runId, { keywords = [], specific = false, override = []
   const d = openDb();
   const settings = { ...getSettings(), ...(state.overrides || {}) };
   const startedAt = state.startedAt;
+  const target = state.target || 0;
+  let targetHit = false;
+  // pagina valida: nao descartada e passa no minimo de anuncios e dias (numeros parciais da busca so subestimam)
+  const validIds = () => {
+    if (!target || !touched.size) return [];
+    const minAds = num(settings, 'min_ads');
+    const minDays = num(settings, 'min_days');
+    const ids = [...touched];
+    const out = [];
+    for (let i = 0; i < ids.length; i += 500) {
+      const part = ids.slice(i, i + 500);
+      const rows = d.prepare(`SELECT page_id, ads_active, oldest_start FROM pages WHERE status != 'discarded' AND page_id IN (${part.map(() => '?').join(',')})`).all(...part);
+      for (const r of rows) {
+        const days = r.oldest_start ? Math.floor((now() - r.oldest_start) / 86400) : -1;
+        if (r.ads_active >= minAds && days >= minDays) out.push(r);
+      }
+    }
+    return out.sort((a, b) => b.ads_active - a.ads_active);
+  };
   const lines = resume && resume.log ? resume.log.split('\n') : [];
   const counters = resume
     ? { searches_done: resume.searches_done, searches_total: resume.searches_total, deep_done: resume.deep_done, ads_seen: resume.ads_seen, pages_found: resume.pages_found, new_pages: resume.new_pages }
@@ -294,6 +315,15 @@ async function runMining(runId, { keywords = [], specific = false, override = []
       counters.pages_found = touched.size;
       d.prepare('UPDATE keywords SET last_run_at = ?, last_ads = ? WHERE id = ?').run(now(), usable.length, kw.id);
       log(`  ${usable.length} anúncios, ${groups.length} páginas (${newHere} novas)`);
+      if (target) {
+        const okNow = validIds().length;
+        log(`  páginas válidas até agora: ${okNow} de ${target}`);
+        if (okNow >= target) {
+          targetHit = true;
+          log(`Meta atingida: ${okNow} páginas válidas. Encerrando as buscas.`);
+          break;
+        }
+      }
 
       if (i < searches.length - 1) {
         await interruptibleSleep(humanPause(settings) * 1000);
@@ -310,7 +340,7 @@ async function runMining(runId, { keywords = [], specific = false, override = []
     if (finalStatus === 'concluida' && !shouldStop() && touched.size > 0) {
       state.phase = 'paginas';
       const ttl = num(settings, 'deep_ttl_days') * 86400;
-      const candidates = d
+      let candidates = d
         .prepare(
           `SELECT page_id, name, ads_active FROM pages
            WHERE last_seen >= ? AND status != 'discarded'
@@ -318,6 +348,11 @@ async function runMining(runId, { keywords = [], specific = false, override = []
            ORDER BY ads_active DESC LIMIT ?`
         )
         .all(startedAt, now() - ttl, num(settings, 'max_deep'));
+      if (targetHit) {
+        // meta ja batida nas buscas: aprofunda so as paginas validas (site e dias reais)
+        const keep = new Set(validIds().slice(0, target).map((r) => r.page_id));
+        candidates = candidates.filter((c) => keep.has(c.page_id));
+      }
       state.total = candidates.length;
       log(`Aprofundando ${candidates.length} paginas para contar anuncios e dias ativos.`);
       let zeros = 0;
@@ -369,6 +404,11 @@ async function runMining(runId, { keywords = [], specific = false, override = []
             deep: true,
           });
           counters.deep_done += 1;
+          if (target && !targetHit && validIds().length >= target) {
+            targetHit = true;
+            log(`Meta atingida: ${target} páginas válidas. Encerrando.`);
+            break;
+          }
           const row = d.prepare('SELECT ads_active, oldest_start, domain FROM pages WHERE page_id = ?').get(String(c.page_id));
           const days = row && row.oldest_start ? Math.floor((now() - row.oldest_start) / 86400) : '?';
           log(`  ${row ? row.ads_active : '?'} anuncios ativos, mais antigo com ${days} dias, site ${row && row.domain ? row.domain : 'nao identificado'}`);

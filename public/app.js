@@ -5,7 +5,7 @@ const toastEl = document.getElementById('toast');
 const S = {
   tab: 'inicio',
   defaultCountries: 'ALL',
-  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '', skipChat: true, minAds: '', minDays: '', smode: '' },
+  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '', skipChat: true, minAds: '', minDays: '', smode: '', target: '' },
   filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false, hideChat: true },
   facets: { niches: [], tags: [], offers: [] },
   reports: [],
@@ -590,6 +590,8 @@ function viewSearch() {
   minAdsIn.addEventListener('input', () => { se.minAds = minAdsIn.value; });
   const minDaysIn = h('input', { type: 'number', min: '0', id: 'b-mindays', placeholder: crit.min_days ? 'padrão ' + crit.min_days : 'padrão', value: se.minDays });
   minDaysIn.addEventListener('input', () => { se.minDays = minDaysIn.value; });
+  const targetIn = h('input', { type: 'number', min: '1', id: 'b-target', placeholder: 'sem limite', value: se.target });
+  targetIn.addEventListener('input', () => { se.target = targetIn.value; });
   const smodeIn = h('select', { id: 'b-smode' }, [['', 'Padrão dos Ajustes'], ['wide', 'Larga (traz mais páginas)'], ['exact', 'Exata (todos os termos)']].map(([v, l]) => h('option', { value: v, selected: se.smode === v }, l)));
   smodeIn.addEventListener('change', () => { se.smode = smodeIn.value; });
   const skipChat = h('input', { type: 'checkbox', id: 'b-skipchat', checked: se.skipChat });
@@ -647,6 +649,8 @@ function viewSearch() {
       h('div', null, h('label', { class: 'lbl', for: 'b-minads' }, 'Anúncios ativos (mín.)'), minAdsIn),
       h('div', null, h('label', { class: 'lbl', for: 'b-mindays' }, 'Dias no ar (mín.)'), minDaysIn),
       h('div', null, h('label', { class: 'lbl', for: 'b-smode' }, 'Modo de busca'), smodeIn)),
+    h('div', null, h('label', { class: 'lbl', for: 'b-target' }, 'Parar quando achar (páginas válidas)'), targetIn,
+      h('div', { class: 'hint' }, 'Página válida é a que passa nos mínimos de anúncios e dias e não é descartada. Ex: 20 encerra a busca assim que achar 20. Vazio roda tudo.')),
     h('div', { class: 'hint' }, 'Mínimos de anúncios e dias decidem quais páginas ganham a análise detalhada. Vazio usa o padrão dos Ajustes. Valem só para esta busca.'),
     h('div', null,
       h('label', { class: 'chk', for: 'b-skipchat' }, skipChat, 'Ignorar anúncios com link para WhatsApp, Telegram e Linktree'),
@@ -676,6 +680,7 @@ async function startSearch() {
   if (se.minAds) body.min_ads = se.minAds;
   if (se.minDays !== '') body.min_days = se.minDays;
   if (se.smode) body.search_mode = se.smode;
+  if (se.target) body.target = se.target;
   try {
     await api('/api/runs', { method: 'POST', body });
     toast('Busca iniciada.');

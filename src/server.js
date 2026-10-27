@@ -751,7 +751,7 @@ function runOverrides(body) {
 
 app.post('/api/runs', async (req, reply) => {
   const ids = req.body && Array.isArray(req.body.keywordIds) ? req.body.keywordIds : null;
-  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries, skipChat: req.body && req.body.skipChat !== undefined ? !!req.body.skipChat : null, overrides: runOverrides(req.body) });
+  const res = startRun({ trigger: 'manual', keywordIds: ids, countries: req.body && req.body.countries, skipChat: req.body && req.body.skipChat !== undefined ? !!req.body.skipChat : null, overrides: runOverrides(req.body), target: req.body && req.body.target });
   if (!res.ok) return reply.code(409).send({ error: res.error });
   return res;
 });
