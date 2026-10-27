@@ -343,6 +343,12 @@ function paintAlert() {
   if (!alertEl) return;
   alertEl.replaceChildren();
   const st = S.status;
+  if (st && st.storage && st.storage.persistent === false && isAdmin()) {
+    alertEl.append(h('div', { class: 'alertbar blocked', role: 'alert' },
+      h('span', { class: 'ai' }, ic('alert')),
+      h('div', { class: 'at' }, h('b', null, 'Os dados NÃO estão sendo guardados'),
+        h('p', null, 'A pasta /data não está num volume. Todo Implantar apaga usuários, páginas e histórico. No EasyPanel, abra o serviço, vá em Mounts, crie um Volume com o caminho /data e implante de novo. Depois disso nada mais some.'))));
+  }
   const a = st && !st.running ? st.alert : null;
   if (!a || S.alertDismissed === a.run_id) return;
   const blocked = a.kind === 'bloqueada';

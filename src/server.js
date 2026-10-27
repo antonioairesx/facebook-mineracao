@@ -27,6 +27,7 @@ import { OFFER_LABEL, classifyAd, isScaling, SCALE_DELTA, SCALE_NEW7 } from './c
 import { readThumb, hasThumb } from './thumbs.js';
 import { recomputeAllDerived } from './store.js';
 import { renderPdf, saveDailyReport, listReports, isReportName, REPORT_DIR } from './report.js';
+import { storageInfo } from './storage.js';
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -676,7 +677,7 @@ app.get('/api/status', async () => {
   if (lastFull && (lastFull.status === 'bloqueada' || lastFull.status === 'erro')) {
     alert = { kind: lastFull.status, run_id: lastFull.id, at: lastFull.finished_at, error: lastFull.error || '', proxy: !!config.proxyServer };
   }
-  return { ...st, pages: counts.pages || 0, fresh: counts.fresh || 0, last_run: last || null, alert };
+  return { ...st, pages: counts.pages || 0, fresh: counts.fresh || 0, last_run: last || null, alert, storage: storageInfo() };
 });
 
 app.get('/api/runs', async () => ({
