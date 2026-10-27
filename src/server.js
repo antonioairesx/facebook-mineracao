@@ -137,12 +137,14 @@ app.post('/api/login', async (req, reply) => {
     if (!passwordMatches(password)) return fail();
     token = makeSession(0);
   } else {
-    const u = db.prepare('SELECT id, pass_hash, active FROM users WHERE username = ?').get(username);
+    const u = db.prepare('SELECT id, pass_hash, active FROM users WHERE username = ? COLLATE NOCASE').get(username);
     if (!u) {
       fakeVerify(password);
       return fail();
     }
-    if (!verifyPassword(password, u.pass_hash) || !u.active) return fail();
+    // aceita a senha como digitada ou sem espacos nas pontas (comum ao colar do WhatsApp)
+    const okPass = verifyPassword(password, u.pass_hash) || (password.trim() !== password && verifyPassword(password.trim(), u.pass_hash));
+    if (!okPass || !u.active) return fail();
     db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(now(), u.id);
     token = makeSession(u.id, tokenTag(u.pass_hash));
   }
@@ -195,15 +197,17 @@ app.post('/api/users', async (req, reply) => {
     return reply.code(400).send({ error: 'A senha precisa ter de 8 a 200 caracteres.' });
   }
   const name = username.trim();
+  const pass = password.trim();
+  if (pass.length < 8) return reply.code(400).send({ error: 'A senha precisa ter de 8 a 200 caracteres.' });
   if (name.toLowerCase() === config.adminUser.toLowerCase()) {
     return reply.code(400).send({ error: 'Esse nome é reservado para o administrador.' });
   }
-  if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) {
+  if (db.prepare('SELECT 1 FROM users WHERE username = ? COLLATE NOCASE').get(name)) {
     return reply.code(409).send({ error: 'Já existe um usuário com esse nome.' });
   }
   const info = db
     .prepare("INSERT INTO users(username, pass_hash, role, active, created_at) VALUES (?, ?, 'member', 1, ?)")
-    .run(name, hashPassword(password), now());
+    .run(name, hashPassword(pass), now());
   return { ok: true, id: Number(info.lastInsertRowid) };
 });
 
@@ -219,7 +223,7 @@ app.patch('/api/users/:id', async (req, reply) => {
     if (typeof body.password !== 'string' || body.password.length < 8 || body.password.length > 200) {
       return reply.code(400).send({ error: 'A senha precisa ter de 8 a 200 caracteres.' });
     }
-    db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(body.password), id);
+    db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(body.password.trim()), id);
   }
   return { ok: true };
 });
