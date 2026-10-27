@@ -22,6 +22,7 @@ import { getState, startRun, stopRun, parseCountries } from './miner.js';
 import { startScheduler } from './scheduler.js';
 import { adLink, pageLibraryLink } from './crawler.js';
 import { toCsv } from './csv.js';
+import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
@@ -74,7 +75,7 @@ function resolveUser(req) {
 // rotas so do admin: tudo que roda, apaga ou configura
 function adminOnly(method, url) {
   if (url === '/api/users' || url.startsWith('/api/users/')) return true;
-  if (url === '/api/settings' || url.startsWith('/api/debug')) return true;
+  if (url === '/api/settings' || url.startsWith('/api/debug') || url.startsWith('/api/backup')) return true;
   if (method !== 'GET' && (url.startsWith('/api/keywords') || url.startsWith('/api/runs'))) return true;
   return false;
 }
@@ -570,7 +571,7 @@ app.get('/api/settings', async () => {
   const s = getSettings();
   const out = {};
   for (const k of Object.keys(DEFAULT_SETTINGS)) {
-    if (k === 'search_cursor' || k === 'last_scheduled_date') continue;
+    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info'].includes(k)) continue;
     out[k] = s[k];
   }
   return { settings: out, timezone: config.timezone, proxy: !!config.proxyServer };
@@ -606,6 +607,28 @@ app.put('/api/settings', async (req, reply) => {
   }
   setSettings(patch);
   return { ok: true };
+});
+
+// ---------- backup (admin) ----------
+app.get('/api/backup/status', async () => ({ drive: driveConfigured(), last: lastBackupInfo() }));
+
+app.get('/api/backup/download', async (req, reply) => {
+  const b = createBackup();
+  reply.header('Content-Type', 'application/gzip');
+  reply.header('Content-Disposition', `attachment; filename="${b.name}"`);
+  reply.header('Cache-Control', 'no-store');
+  return fs.readFileSync(b.path);
+});
+
+app.post('/api/backup/drive', async (req, reply) => {
+  try {
+    const r = await sendToDrive();
+    recordBackup(true, 'Enviado: ' + r.name);
+    return { ok: true, name: r.name };
+  } catch (err) {
+    recordBackup(false, err.message);
+    return reply.code(502).send({ error: err.message });
+  }
 });
 
 // ---------- diagnostico ----------

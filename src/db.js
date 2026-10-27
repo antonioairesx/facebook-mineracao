@@ -19,6 +19,8 @@ export const DEFAULT_SETTINGS = {
   schedule_every_hours: '24',
   search_cursor: '0',
   last_scheduled_date: '',
+  last_backup_date: '',
+  last_backup_info: '',
 };
 
 const SCHEMA = `

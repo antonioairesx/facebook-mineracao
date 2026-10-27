@@ -1,6 +1,7 @@
 import { openDb, getSettings, setSettings, num, now } from './db.js';
 import { config } from './config.js';
 import { isRunning, startRun } from './miner.js';
+import { backupTick } from './backup.js';
 
 function localParts() {
   const parts = new Intl.DateTimeFormat('en-CA', {
@@ -41,5 +42,6 @@ export function startScheduler() {
     } catch (err) {
       console.error('Falha no agendador', err);
     }
+    backupTick().catch((err) => console.error('Falha no backup', err));
   }, 60 * 1000);
 }

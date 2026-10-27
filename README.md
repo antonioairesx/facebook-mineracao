@@ -41,3 +41,7 @@ O Facebook pode pedir login ou limitar o acesso. Quando isso acontece a rodada p
 ## Aviso
 
 O minerador le a parte publica da Biblioteca de Anuncios, que nao tem API oficial para anuncios comerciais na America Latina. A estrutura da pagina muda de tempo em tempo, entao a primeira rodada real costuma pedir um ajuste fino.
+
+## Backup
+
+Em **Ajustes** o administrador baixa o banco quando quiser (arquivo `.db.gz`). Para envio automatico ao Google Drive, defina no EasyPanel `BACKUP_WEBHOOK_URL` (endereco do Apps Script) e `BACKUP_KEY` (chave secreta, igual a do script). Um backup por dia sai depois das 04:30 e o script guarda os 14 mais recentes na pasta `Backups Garimpo` do Drive. O app tambem guarda os 7 mais recentes em `/data/backups`.

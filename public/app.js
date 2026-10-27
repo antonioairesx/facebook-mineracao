@@ -730,10 +730,37 @@ async function viewSettings() {
         h('div', null, h('label', { class: 'lbl', for: 's-mode' }, 'Rodar sozinho'), mode),
         h('div', null, h('label', { class: 'lbl', for: 's-time' }, 'Horario (modo diario)'), time)
       )),
+      backupBlock(),
       h('div', { class: 'hint' }, d.proxy ? 'Proxy configurado no servidor.' : 'Sem proxy. Se o Facebook bloquear o IP da VPS, configure PROXY_SERVER nas variaveis do servico.'),
       h('div', null, save)
     ));
   } catch (ex) { toast(ex.message, true); }
+}
+
+function backupBlock() {
+  const box = h('fieldset', null, h('h2', { class: 'sec' }, 'Backup do banco'));
+  const info = h('div', { class: 'hint' }, 'Carregando...');
+  const dl = h('a', { class: 'btn', href: '/api/backup/download', download: '' }, 'Baixar backup agora');
+  const drive = h('button', { class: 'btn', onclick: async () => {
+    drive.disabled = true;
+    try { const r = await api('/api/backup/drive', { method: 'POST', body: {} }); toast('Enviado ao Drive: ' + r.name); }
+    catch (ex) { toast(ex.message, true); }
+    drive.disabled = false;
+    paintBackupInfo();
+  } }, 'Enviar ao Drive agora');
+  box.append(h('div', { class: 'actions' }, dl, drive), info);
+  async function paintBackupInfo() {
+    try {
+      const st = await api('/api/backup/status');
+      drive.classList.toggle('hidden', !st.drive);
+      const parts = [];
+      parts.push(st.drive ? 'Drive ligado: um backup automatico por dia, depois das 04:30.' : 'Drive desligado. Para ligar, defina BACKUP_WEBHOOK_URL e BACKUP_KEY no EasyPanel.');
+      if (st.last) parts.push('Ultimo envio: ' + fmtDateTime(Math.floor(st.last.at)) + ' (' + (st.last.ok ? 'ok' : 'falhou') + '). ' + st.last.message);
+      info.textContent = parts.join(' ');
+    } catch { info.textContent = ''; }
+  }
+  paintBackupInfo();
+  return box;
 }
 
 async function refreshCriteria() {

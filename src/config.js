@@ -13,6 +13,8 @@ export const config = {
   proxyUser: env.PROXY_USER || '',
   proxyPass: env.PROXY_PASS || '',
   headless: env.HEADLESS !== '0',
+  backupWebhookUrl: env.BACKUP_WEBHOOK_URL || '',
+  backupKey: env.BACKUP_KEY || '',
   sessionHours: Number(env.SESSION_HOURS || 24 * 14),
 };
 
