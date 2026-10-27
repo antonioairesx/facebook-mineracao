@@ -47,7 +47,7 @@ export function createBackup() {
 }
 
 export async function sendToDrive() {
-  if (!driveConfigured()) throw new Error('Drive nao configurado (faltam BACKUP_WEBHOOK_URL e BACKUP_KEY).');
+  if (!driveConfigured()) throw new Error('Drive não configurado (faltam BACKUP_WEBHOOK_URL e BACKUP_KEY).');
   const b = createBackup();
   const data = fs.readFileSync(b.path).toString('base64');
   const res = await fetch(config.backupWebhookUrl, {
@@ -61,7 +61,7 @@ export async function sendToDrive() {
   try {
     out = await res.json();
   } catch {
-    throw new Error('Resposta inesperada do Google (confira se a implantacao permite acesso para "Qualquer pessoa").');
+    throw new Error('Resposta inesperada do Google (confira se a implantação permite acesso para "Qualquer pessoa").');
   }
   if (!out || !out.ok) throw new Error('O Google recusou: ' + ((out && out.error) || 'sem detalhe'));
   return { name: b.name };

@@ -42,6 +42,84 @@ function h(tag, attrs, ...kids) {
   return el;
 }
 
+const ICONS = {
+  layers: ['M12 2 2 7l10 5 10-5-10-5Z', 'm2 17 10 5 10-5', 'm2 12 10 5 10-5'],
+  list: ['M8 6h13', 'M8 12h13', 'M8 18h13', 'M3 6h.01', 'M3 12h.01', 'M3 18h.01'],
+  target: ['M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z', 'M18 12a6 6 0 1 1-12 0 6 6 0 0 1 12 0Z', 'M14 12a2 2 0 1 1-4 0 2 2 0 0 1 4 0Z'],
+  dot: ['M12 7a5 5 0 1 0 0 10 5 5 0 0 0 0-10Z'],
+  search: ['m21 21-4.3-4.3', 'M19 11a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z'],
+  play: ['M7 4.5v15l12-7.5-12-7.5Z'],
+  stop: ['M6 6h12v12H6Z'],
+  logout: ['M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4', 'm16 17 5-5-5-5', 'M21 12H9'],
+  sun: ['M16 12a4 4 0 1 1-8 0 4 4 0 0 1 8 0Z', 'M12 2v2', 'M12 20v2', 'm4.93 4.93 1.41 1.41', 'm17.66 17.66 1.41 1.41', 'M2 12h2', 'M20 12h2', 'm6.34 17.66-1.41 1.41', 'm19.07 4.93-1.41 1.41'],
+  moon: ['M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z'],
+  eye: ['M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z', 'M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z'],
+  star: ['m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2Z'],
+  trash: ['M3 6h18', 'M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6', 'M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2'],
+  download: ['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'm7 10 5 5 5-5', 'M12 15V3'],
+  external: ['M15 3h6v6', 'M10 14 21 3', 'M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6'],
+  right: ['m9 18 6-6-6-6'],
+  more: ['M12 5h.01', 'M12 12h.01', 'M12 19h.01'],
+  refresh: ['M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8', 'M21 3v5h-5', 'M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16', 'M8 16H3v5'],
+  file: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6'],
+  updown: ['m7 15 5 5 5-5', 'm7 9 5-5 5 5'],
+  x: ['M18 6 6 18', 'M6 6l12 12'],
+  sparkle: ['M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z'],
+  doc: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6', 'M8 13h8', 'M8 17h8'],
+};
+const FILLED = new Set(['play', 'stop', 'dot']);
+function ic(name) {
+  const ns = 'http://www.w3.org/2000/svg';
+  const el = document.createElementNS(ns, 'svg');
+  el.setAttribute('viewBox', '0 0 24 24');
+  el.setAttribute('class', 'ic');
+  el.setAttribute('aria-hidden', 'true');
+  el.setAttribute('fill', FILLED.has(name) ? 'currentColor' : 'none');
+  el.setAttribute('stroke', 'currentColor');
+  el.setAttribute('stroke-width', FILLED.has(name) ? '1' : '2');
+  el.setAttribute('stroke-linecap', 'round');
+  el.setAttribute('stroke-linejoin', 'round');
+  for (const d of ICONS[name] || []) {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    el.append(path);
+  }
+  return el;
+}
+
+function currentTheme() {
+  const t = document.documentElement.getAttribute('data-theme');
+  if (t === 'dark' || t === 'light') return t;
+  return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+}
+function themeButton() {
+  const btn = h('button', { class: 'iconbtn', type: 'button' });
+  const paint = () => {
+    const dark = currentTheme() === 'dark';
+    btn.replaceChildren(ic(dark ? 'sun' : 'moon'));
+    btn.setAttribute('aria-label', dark ? 'Usar tema claro' : 'Usar tema escuro');
+    btn.title = dark ? 'Tema claro' : 'Tema escuro';
+  };
+  btn.addEventListener('click', () => {
+    const next = currentTheme() === 'dark' ? 'light' : 'dark';
+    document.documentElement.setAttribute('data-theme', next);
+    try { localStorage.setItem('garimpo_theme', next); } catch { /* sem armazenamento */ }
+    paint();
+  });
+  paint();
+  return btn;
+}
+
+function avatar(name) {
+  const words = String(name || '?').trim().split(/\s+/).filter(Boolean);
+  const ini = ((words[0] || '?')[0] + (words[1] ? words[1][0] : '')).toUpperCase();
+  let hue = 0;
+  for (const ch of String(name || '')) hue = (hue * 31 + ch.charCodeAt(0)) % 360;
+  const el = h('div', { class: 'avatar', 'aria-hidden': 'true' }, ini);
+  el.style.setProperty('--h', String(hue));
+  return el;
+}
+
 function svgLogo() {
   const ns = 'http://www.w3.org/2000/svg';
   const s = document.createElementNS(ns, 'svg');
@@ -50,7 +128,7 @@ function svgLogo() {
   for (const [x, y, hh] of bars) {
     const r = document.createElementNS(ns, 'rect');
     r.setAttribute('x', x); r.setAttribute('y', y); r.setAttribute('width', 4); r.setAttribute('height', hh);
-    r.setAttribute('rx', 1); r.setAttribute('fill', 'oklch(0.78 0.145 78)');
+    r.setAttribute('rx', 1); r.style.fill = 'var(--link)';
     s.append(r);
   }
   return s;
@@ -77,7 +155,7 @@ async function api(path, { method = 'GET', body } = {}) {
   if (res.status === 401 && path !== '/api/login') {
     stopPolling();
     renderLogin();
-    throw new Error('Sessao expirada.');
+    throw new Error('Sessão expirada.');
   }
   if (!res.ok) throw new Error((data && data.error) || 'Erro ' + res.status);
   return data;
@@ -102,12 +180,13 @@ function ago(sec) {
   if (!sec) return 'nunca';
   const d = Math.floor(Date.now() / 1000) - sec;
   if (d < 90) return 'agora';
-  if (d < 5400) return Math.round(d / 60) + ' min atras';
-  if (d < 129600) return Math.round(d / 3600) + ' h atras';
-  return Math.round(d / 86400) + ' dias atras';
+  if (d < 5400) return 'há ' + Math.round(d / 60) + ' min';
+  if (d < 129600) return 'há ' + Math.round(d / 3600) + ' h';
+  if (d < 1209600) return 'há ' + Math.round(d / 86400) + ' dias';
+  return 'há ' + Math.round(d / 604800) + ' semanas';
 }
-const STATUS_LABEL = { new: 'novo', seen: 'visto', fav: 'favorito', discarded: 'descartado' };
-const RUN_LABEL = { concluida: 'concluida', bloqueada: 'bloqueada', erro: 'erro', cancelada: 'cancelada', interrompida: 'interrompida', rodando: 'rodando' };
+const STATUS_LABEL = { new: 'Novo', seen: 'Visto', fav: 'Favorito', discarded: 'Descartado' };
+const RUN_LABEL = { concluida: 'Concluída', bloqueada: 'Bloqueada', erro: 'Erro', cancelada: 'Cancelada', interrompida: 'Interrompida', rodando: 'Em andamento' };
 
 /* ---------- login ---------- */
 function renderLogin() {
@@ -116,7 +195,7 @@ function renderLogin() {
   const pass = h('input', { type: 'password', id: 'pw', autocomplete: 'current-password' });
   const err = h('div', { class: 'err', role: 'alert' });
   const form = h('form', { class: 'login-form' },
-    h('div', null, h('label', { class: 'lbl', for: 'un' }, 'Usuario'), user),
+    h('div', null, h('label', { class: 'lbl', for: 'un' }, 'Usuário'), user),
     h('div', null, h('label', { class: 'lbl', for: 'pw' }, 'Senha'), pass),
     err,
     h('button', { class: 'btn primary', type: 'submit' }, 'Entrar')
@@ -135,9 +214,9 @@ function renderLogin() {
   root.append(
     h('div', { class: 'login' },
       h('div', { class: 'login-side' },
-        h('div', { class: 'login-brand' }, 'Garimpo'),
+        h('div', { class: 'login-brand' }, svgLogo(), 'Garimpo', h('span', { style: null, class: 'faint' }, ' '), themeButton()),
         h('h1', { class: 'login-title' }, 'Quem anuncia ', h('span', null, 'de verdade'), '.'),
-        h('p', { class: 'login-note' }, 'Anunciantes da Biblioteca de Anuncios, ordenados por quantos anuncios ativos tem e ha quantos dias rodam.')
+        h('p', { class: 'login-note' }, 'Anunciantes da Biblioteca de Anúncios, ordenados por quantos anúncios ativos têm e há quantos dias rodam.')
       ),
       h('div', { class: 'login-form-wrap' }, form)
     )
@@ -149,9 +228,10 @@ function renderLogin() {
 let viewEl = null;
 let runstateEl = null;
 let runBtn = null;
-const TABS_ALL = [['paginas', 'Paginas', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
+const TABS_ALL = [['paginas', 'Páginas', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
 const tabsFor = () => TABS_ALL.filter(([, , adminOnly]) => !adminOnly || isAdmin());
 
+let themeBtnEl = null;
 function renderShell() {
   root.replaceChildren();
   const tabs = h('div', { class: 'tabs', role: 'tablist' },
@@ -160,13 +240,14 @@ function renderShell() {
     )
   );
   runstateEl = h('div', { class: 'runstate' });
-  runBtn = isAdmin() ? h('button', { class: 'btn primary', onclick: onRunClick }, 'Rodar agora') : null;
+  runBtn = isAdmin() ? h('button', { class: 'btn primary', onclick: onRunClick }) : null;
   const top = h('header', { class: 'top' },
     h('div', { class: 'logo' }, svgLogo(), h('span', null, 'Garimpo')),
     tabs,
     h('div', { class: 'top-right' }, runstateEl, runBtn,
-      h('span', { class: 'faint', style: null }, S.user ? S.user.username : ''),
-      h('button', { class: 'btn ghost small', onclick: logout }, 'Sair'))
+      h('span', { class: 'who' }, S.user ? S.user.username : ''),
+      themeButton(),
+      h('button', { class: 'btn ghost small', onclick: logout }, ic('logout'), 'Sair'))
   );
   viewEl = h('main');
   root.append(top, viewEl, buildDrawer());
@@ -197,6 +278,11 @@ function renderTab() {
 }
 
 /* ---------- estado da rodada ---------- */
+function setRunBtn(running) {
+  if (!runBtn) return;
+  runBtn.replaceChildren(ic(running ? 'stop' : 'play'), running ? 'Parar' : 'Rodar agora');
+  runBtn.className = running ? 'btn danger' : 'btn primary';
+}
 function paintRunState() {
   const st = S.status;
   if (!runstateEl || !st) return;
@@ -206,15 +292,20 @@ function paintRunState() {
       h('span', { class: 'dot on' }),
       h('span', { class: 'msg num' }, (st.phase ? st.phase + ' ' : '') + st.done + '/' + st.total + (st.message ? ' ' + st.message : ''))
     );
-    if (runBtn) { runBtn.textContent = 'Parar'; runBtn.className = 'btn danger'; }
   } else {
     const lr = st.last_run;
-    runstateEl.append(
-      h('span', { class: 'dot' }),
-      h('span', { class: 'msg' }, lr ? 'Ultima rodada ' + ago(lr.finished_at || lr.started_at) + ' (' + (RUN_LABEL[lr.status] || lr.status) + ')' : 'Nenhuma rodada ainda')
-    );
-    if (runBtn) { runBtn.textContent = 'Rodar agora'; runBtn.className = 'btn primary'; }
+    if (lr) {
+      const good = lr.status === 'concluida';
+      runstateEl.append(
+        h('span', { class: 'dot ' + (good ? 'ok' : lr.status === 'bloqueada' || lr.status === 'erro' ? 'bad' : '') }),
+        h('span', { class: 'msg' }, 'Última rodada ' + ago(lr.finished_at || lr.started_at)),
+        h('span', { class: 'badge plain ' + lr.status }, RUN_LABEL[lr.status] || lr.status)
+      );
+    } else {
+      runstateEl.append(h('span', { class: 'dot' }), h('span', { class: 'msg' }, 'Nenhuma rodada ainda'));
+    }
   }
+  setRunBtn(!!st.running);
 }
 
 async function refreshStatus() {
@@ -276,16 +367,16 @@ let bulkBox = null;
 
 function viewPages() {
   const f = S.filters;
-  const q = h('input', { type: 'text', id: 'f-q', placeholder: 'Nome ou dominio', value: f.q });
+  const q = h('input', { type: 'text', id: 'f-q', placeholder: 'Nome ou domínio', value: f.q });
   let qTimer = null;
   q.addEventListener('input', () => { clearTimeout(qTimer); qTimer = setTimeout(() => { f.q = q.value.trim(); loadPages(); }, 300); });
   const status = h('select', { id: 'f-status' },
     [['active', 'Sem descartadas'], ['all', 'Todas'], ['new', 'Novas'], ['seen', 'Vistas'], ['fav', 'Favoritas'], ['discarded', 'Descartadas']]
       .map(([v, l]) => h('option', { value: v, selected: f.status === v }, l)));
   status.addEventListener('change', () => { f.status = status.value; loadPages(); });
-  const minAds = h('input', { type: 'number', min: '0', id: 'f-ads', placeholder: 'min', value: f.min_ads });
+  const minAds = h('input', { type: 'number', min: '0', id: 'f-ads', placeholder: 'mín.', value: f.min_ads });
   minAds.addEventListener('change', () => { f.min_ads = minAds.value; loadPages(); });
-  const minDays = h('input', { type: 'number', min: '0', id: 'f-days', placeholder: 'min', value: f.min_days });
+  const minDays = h('input', { type: 'number', min: '0', id: 'f-days', placeholder: 'mín.', value: f.min_days });
   minDays.addEventListener('change', () => { f.min_days = minDays.value; loadPages(); });
   const country = h('input', { type: 'text', id: 'f-country', placeholder: 'MX', maxlength: '2', value: f.country });
   country.addEventListener('change', () => { f.country = country.value.trim().toUpperCase(); loadPages(); });
@@ -302,17 +393,16 @@ function viewPages() {
   pagesBox = h('div');
   viewEl.append(
     summaryBox,
-    h('div', { class: 'filters' },
-      field('Buscar', q, 'f-q'),
+    h('div', { class: 'card filters' },
+      field('Buscar', h('div', { class: 'fieldicon' }, ic('search'), q), 'f-q'),
       field('Status', status, 'f-status'),
-      field('Anuncios (min)', minAds, 'f-ads'),
-      field('Dias (min)', minDays, 'f-days'),
-      field('Pais', country, 'f-country'),
+      field('Anúncios (mín.)', minAds, 'f-ads'),
+      field('Dias (mín.)', minDays, 'f-days'),
+      field('País', country, 'f-country'),
       field('Palavra-chave', term, 'f-term'),
-      h('label', { class: 'chk', for: 'f-only' }, only, 'So os que passam no criterio')
+      h('label', { class: 'chk', for: 'f-only' }, only, 'Só os que passam no critério')
     ),
-    bulkBox,
-    pagesBox
+    h('div', { class: 'card tablecard' }, bulkBox, pagesBox)
   );
   paintSummary();
   loadPages();
@@ -321,11 +411,17 @@ function viewPages() {
 function paintSummary() {
   if (!summaryBox) return;
   const st = S.status || {};
+  const stat = (icon, value, label, warm) =>
+    h('div', { class: 'stat' + (warm ? ' warm' : '') },
+      h('div', { class: 'tile' }, ic(icon)),
+      h('div', null, h('b', { class: 'num' }, String(value)), h('span', null, label)));
   summaryBox.replaceChildren(
-    h('div', { class: 'stat' }, h('b', { class: 'num' }, String(st.pages ?? S.total)), h('span', null, 'paginas no banco')),
-    h('div', { class: 'stat' }, h('b', { class: 'num' }, String(st.fresh ?? 0)), h('span', null, 'novas para ver')),
-    h('div', { class: 'stat' }, h('b', { class: 'num' }, String(S.total)), h('span', null, 'na lista agora')),
-    h('div', { class: 'stat' }, h('span', null, 'Criterio: ' + S.criteria.min_ads + '+ anuncios e ' + S.criteria.min_days + '+ dias'))
+    stat('layers', st.pages ?? S.total, 'páginas no banco'),
+    stat('dot', st.fresh ?? 0, 'novas para ver', true),
+    stat('list', S.total, 'na lista agora'),
+    h('div', { class: 'stat' },
+      h('div', { class: 'tile' }, ic('target')),
+      h('div', null, h('small', null, 'Critério atual'), h('span', { class: 'crit num' }, S.criteria.min_ads + '+ anúncios e ' + S.criteria.min_days + '+ dias')))
   );
 }
 
@@ -346,12 +442,12 @@ async function loadPages(append) {
 }
 
 function sortHeader(label, key) {
-  const th = h('th', { class: 'sortable', onclick: () => {
+  const active = S.sort === key;
+  return h('th', { class: 'sortable', onclick: () => {
     if (S.sort === key) S.dir = S.dir === 'desc' ? 'asc' : 'desc';
     else { S.sort = key; S.dir = key === 'name' ? 'asc' : 'desc'; }
     loadPages();
-  } }, label, S.sort === key ? h('span', { class: 'arrow' }, S.dir === 'desc' ? 'v' : '^') : null);
-  return th;
+  } }, label, active ? h('span', { class: 'arrow' }, S.dir === 'desc' ? '↓' : '↑') : h('span', { class: 'arrow faint' }, ic('updown')));
 }
 
 function barCell(value, max, threshold, hit) {
@@ -361,7 +457,7 @@ function barCell(value, max, threshold, hit) {
   fill.style.width = pct + '%';
   track.append(fill);
   if (threshold > 0 && threshold <= max) {
-    const tick = h('div', { class: 'tick', title: 'Criterio: ' + threshold });
+    const tick = h('div', { class: 'tick', title: 'Critério: ' + threshold }, h('span', null, String(threshold)));
     tick.style.left = (threshold / max) * 100 + '%';
     track.append(tick);
   }
@@ -371,8 +467,8 @@ function barCell(value, max, threshold, hit) {
 function paintTable() {
   pagesBox.replaceChildren();
   if (!S.rows.length) {
-    const none = (S.status && S.status.pages) ? 'Nada bate com esses filtros. Afrouxe um deles.' : 'Ainda nao ha paginas. Cadastre palavras-chave e toque em Rodar agora.';
-    pagesBox.append(h('div', { class: 'empty' }, h('b', null, 'Lista vazia'), none));
+    const none = (S.status && S.status.pages) ? 'Nada bate com esses filtros. Afrouxe um deles.' : 'Ainda não há páginas. Cadastre palavras-chave e toque em Rodar agora.';
+    pagesBox.append(h('div', { class: 'empty' }, h('div', { class: 'big' }, ic('doc')), h('b', null, 'Lista vazia'), h('p', null, none)));
     return;
   }
   const maxAds = Math.max(50, ...S.rows.map((r) => r.ads_active || 0));
@@ -385,13 +481,14 @@ function paintTable() {
   all.addEventListener('click', (e) => e.stopPropagation());
   const thead = h('thead', null, h('tr', null,
     h('th', { class: 'cb' }, all),
-    sortHeader('Pagina', 'name'),
-    sortHeader('Anuncios ativos', 'ads_active'),
+    sortHeader('Página', 'name'),
+    sortHeader('Anúncios ativos', 'ads_active'),
     sortHeader('Dias rodando', 'days'),
     h('th', null, 'Site'),
-    h('th', null, 'Paises'),
+    h('th', null, 'Países'),
     h('th', null, 'Status'),
-    sortHeader('Visto em', 'first_seen')
+    sortHeader('Visto em', 'first_seen'),
+    h('th', { class: 'act' })
   ));
   const tbody = h('tbody');
   for (const r of S.rows) {
@@ -400,28 +497,68 @@ function paintTable() {
     cb.addEventListener('change', () => { if (cb.checked) S.selected.add(r.page_id); else S.selected.delete(r.page_id); paintBulk(); });
     const pill = h('button', { class: 'pill ' + r.status, title: 'Clique para mudar o status', onclick: (e) => { e.stopPropagation(); cycleStatus(r); } }, STATUS_LABEL[r.status] || r.status);
     const site = r.domain
-      ? h('a', { href: r.site_url || ('https://' + r.domain), target: '_blank', rel: 'noopener noreferrer', onclick: (e) => e.stopPropagation() }, r.domain)
+      ? h('a', { href: r.site_url || ('https://' + r.domain), target: '_blank', rel: 'noopener noreferrer', onclick: (e) => e.stopPropagation() }, r.domain + ' ', ic('external'))
       : h('span', { class: 'faint' }, '-');
+    const kebab = h('button', { class: 'iconbtn', type: 'button', 'aria-label': 'Mais ações', onclick: (e) => { e.stopPropagation(); openRowMenu(kebab, r); } }, ic('more'));
     const tr = h('tr', { class: (r.status === 'new' ? 'is-new ' : '') + (r.status === 'discarded' ? 'is-discarded' : ''), tabindex: '0', onclick: () => openDrawer(r.page_id) },
       h('td', { class: 'cb' }, cb),
-      h('td', null,
-        h('div', { class: 'pname' }, r.name || '(sem nome)'),
-        h('div', { class: 'pmeta' }, r.qualifies ? h('span', { class: 'flag' }, 'passa no criterio') : null, r.qualifies ? ' ' : null, r.terms.length ? r.terms[0] + (r.terms.length > 1 ? ' +' + (r.terms.length - 1) : '') : '')
-      ),
+      h('td', null, h('div', { class: 'pcell' }, avatar(r.name),
+        h('div', null,
+          h('div', { class: 'pname' }, r.name || '(sem nome)'),
+          h('div', { class: 'pmeta' },
+            r.qualifies ? h('span', { class: 'chip pass' }, 'passa no critério') : null,
+            r.terms.length ? h('span', { class: 'chip' }, r.terms[0] + (r.terms.length > 1 ? ' +' + (r.terms.length - 1) : '')) : null)))),
       h('td', null, barCell(r.ads_active, maxAds, S.criteria.min_ads, r.ads_active >= S.criteria.min_ads)),
       h('td', null, barCell(r.days, maxDays, S.criteria.min_days, r.days !== null && r.days >= S.criteria.min_days)),
       h('td', null, site),
-      h('td', { class: 'dim' }, r.countries.join(' ')),
+      h('td', null, h('div', { class: 'countries' }, r.countries.map((c) => h('span', { class: 'cchip' }, c)))),
       h('td', null, pill),
-      h('td', { class: 'dim num' }, fmtDate(r.first_seen))
+      h('td', { class: 'dim' }, ago(r.first_seen)),
+      h('td', { class: 'act' }, kebab)
     );
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') openDrawer(r.page_id); });
     tbody.append(tr);
   }
   pagesBox.append(h('div', { class: 'tablewrap' }, h('table', null, thead, tbody)));
   if (S.rows.length < S.total) {
-    pagesBox.append(h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => loadPages(true) }, 'Carregar mais (' + (S.total - S.rows.length) + ')')));
+    pagesBox.append(h('div', { class: 'more' }, h('button', { class: 'btn', onclick: () => loadPages(true) }, 'Carregar mais (' + (S.total - S.rows.length) + ')', ic('updown'))));
   }
+}
+
+let menuEl = null;
+function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
+document.addEventListener('click', closeMenu);
+window.addEventListener('scroll', closeMenu, true);
+
+function openRowMenu(btn, r) {
+  closeMenu();
+  const rect = btn.getBoundingClientRect();
+  const item = (icon, label, fn) => h('button', { type: 'button', onclick: () => { closeMenu(); fn(); } }, ic(icon), label);
+  const link = (icon, label, href) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, ic(icon), label);
+  const items = [
+    item('eye', 'Abrir detalhes', () => openDrawer(r.page_id)),
+    link('external', 'Abrir na Biblioteca', r.library_url),
+  ];
+  if (r.domain) items.push(link('external', 'Abrir o site', r.site_url || ('https://' + r.domain)));
+  items.push(h('hr'));
+  for (const st of ['new', 'seen', 'fav', 'discarded']) {
+    if (st !== r.status) items.push(item(st === 'fav' ? 'star' : st === 'discarded' ? 'trash' : 'dot', 'Marcar como ' + STATUS_LABEL[st].toLowerCase(), () => setStatus(r, st)));
+  }
+  menuEl = h('div', { class: 'menu', role: 'menu', onclick: (e) => e.stopPropagation() }, items);
+  document.body.append(menuEl);
+  const w = menuEl.offsetWidth || 220;
+  menuEl.style.left = Math.max(8, Math.min(rect.right - w, window.innerWidth - w - 8)) + 'px';
+  const hgt = menuEl.offsetHeight;
+  menuEl.style.top = (rect.bottom + hgt + 8 > window.innerHeight ? Math.max(8, rect.top - hgt - 4) : rect.bottom + 4) + 'px';
+}
+
+async function setStatus(r, status) {
+  try {
+    await api('/api/pages/' + encodeURIComponent(r.page_id), { method: 'PATCH', body: { status } });
+    r.status = status;
+    paintTable();
+    refreshStatus();
+  } catch (ex) { toast(ex.message, true); }
 }
 
 function paintBulk() {
@@ -429,10 +566,12 @@ function paintBulk() {
   bulkBox.replaceChildren();
   const n = S.selected.size;
   if (n) {
-    const mk = (label, status) => h('button', { class: 'btn small', onclick: () => bulkStatus(status) }, label);
-    bulkBox.append(h('span', null, n + ' selecionadas'), mk('Marcar vistas', 'seen'), mk('Favoritar', 'fav'), mk('Descartar', 'discarded'));
+    const mk = (icon, label, status, cls) => h('button', { class: 'btn ' + (cls || ''), onclick: () => bulkStatus(status) }, ic(icon), label);
+    bulkBox.append(h('strong', null, n + (n === 1 ? ' selecionada' : ' selecionadas')), mk('eye', 'Marcar vistas', 'seen', 'tint'), mk('star', 'Favoritar', 'fav'), mk('trash', 'Descartar', 'discarded'));
+  } else {
+    bulkBox.append(h('span', { class: 'dim' }, S.total + (S.total === 1 ? ' página na lista' : ' páginas na lista')));
   }
-  bulkBox.append(h('a', { href: '/api/export.csv?' + queryString().toString(), class: 'btn small', style: null, download: '' }, 'Exportar CSV'));
+  bulkBox.append(h('a', { class: 'btn primary spacer', href: '/api/export.csv?' + queryString().toString(), download: '' }, ic('download'), 'Exportar CSV'));
 }
 
 async function bulkStatus(status) {
@@ -459,7 +598,7 @@ let drawerEl = null;
 let scrimEl = null;
 function buildDrawer() {
   scrimEl = h('div', { class: 'scrim', onclick: closeDrawer });
-  drawerEl = h('aside', { class: 'drawer', 'aria-hidden': 'true', role: 'dialog', 'aria-label': 'Detalhes da pagina' });
+  drawerEl = h('aside', { class: 'drawer', 'aria-hidden': 'true', role: 'dialog', 'aria-label': 'Detalhes da página' });
   const wrap = h('div');
   wrap.append(scrimEl, drawerEl);
   return wrap;
@@ -471,7 +610,7 @@ function closeDrawer() {
   drawerEl.setAttribute('aria-hidden', 'true');
   S.openPage = null;
 }
-document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDrawer(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { closeDrawer(); closeMenu(); } });
 
 async function openDrawer(id) {
   try {
@@ -487,11 +626,11 @@ async function openDrawer(id) {
       }).catch(() => {});
       p.status = 'seen';
     }
-    const notes = h('textarea', { id: 'd-notes', placeholder: 'Anotacoes sobre essa pagina' });
+    const notes = h('textarea', { id: 'd-notes', placeholder: 'Anotações sobre essa página' });
     notes.value = p.notes || '';
     const saveNotes = h('button', { class: 'btn small', onclick: async () => {
-      try { await api('/api/pages/' + encodeURIComponent(id), { method: 'PATCH', body: { notes: notes.value } }); toast('Anotacao salva.'); } catch (ex) { toast(ex.message, true); }
-    } }, 'Salvar anotacao');
+      try { await api('/api/pages/' + encodeURIComponent(id), { method: 'PATCH', body: { notes: notes.value } }); toast('Anotação salva.'); } catch (ex) { toast(ex.message, true); }
+    } }, 'Salvar anotação');
     const seg = h('div', { class: 'statusseg' });
     function paintSeg() {
       seg.replaceChildren(...['new', 'seen', 'fav', 'discarded'].map((s) =>
@@ -510,26 +649,26 @@ async function openDrawer(id) {
     paintSeg();
 
     const kv = h('dl', { class: 'kv' },
-      h('dt', null, 'Anuncios ativos'), h('dd', { class: 'num' }, String(p.ads_active) + (p.ads_groups ? ' (' + p.ads_groups + ' criativos distintos)' : '')),
+      h('dt', null, 'Anúncios ativos'), h('dd', { class: 'num' }, String(p.ads_active) + (p.ads_groups ? ' (' + p.ads_groups + ' criativos distintos)' : '')),
       h('dt', null, 'Mais antigo'), h('dd', { class: 'num' }, p.days === null || p.days === undefined ? 'sem data' : p.days + ' dias'),
       h('dt', null, 'Site'), h('dd', null, p.domain ? h('a', { href: p.site_url || ('https://' + p.domain), target: '_blank', rel: 'noopener noreferrer' }, p.site_url || p.domain) : '-'),
-      h('dt', null, 'Paises'), h('dd', null, p.countries.join(', ') || '-'),
+      h('dt', null, 'Países'), h('dd', null, p.countries.join(', ') || '-'),
       h('dt', null, 'Achada por'), h('dd', null, p.terms.join(' | ') || '-'),
       h('dt', null, 'Primeira vez'), h('dd', { class: 'num' }, fmtDate(p.first_seen)),
-      h('dt', null, 'Dados'), h('dd', null, p.deep ? 'varredura completa da pagina' : 'so da busca (ainda sem varredura da pagina)')
+      h('dt', null, 'Dados'), h('dd', null, p.deep ? 'varredura completa da página' : 'só da busca (ainda sem varredura da página)')
     );
-    const ads = h('div', { class: 'adlist' }, d.ads.length ? d.ads.map(adRow) : h('div', { class: 'empty' }, 'Nenhum anuncio guardado ainda.'));
+    const ads = h('div', { class: 'adlist' }, d.ads.length ? d.ads.map(adRow) : h('div', { class: 'empty' }, 'Nenhum anúncio guardado ainda.'));
     drawerEl.replaceChildren(
-      h('div', { class: 'dhead' }, h('h3', null, p.name || '(sem nome)'), h('button', { class: 'btn ghost small', onclick: closeDrawer, 'aria-label': 'Fechar' }, 'Fechar')),
+      h('div', { class: 'dhead' }, h('h3', null, p.name || '(sem nome)'), h('button', { class: 'iconbtn', onclick: closeDrawer, 'aria-label': 'Fechar' }, ic('x'))),
       h('div', { class: 'dbody' },
         h('div', { class: 'actions' },
-          h('a', { class: 'btn primary', href: p.library_url, target: '_blank', rel: 'noopener noreferrer' }, 'Abrir na Biblioteca'),
+          h('a', { class: 'btn primary', href: p.library_url, target: '_blank', rel: 'noopener noreferrer' }, 'Abrir na Biblioteca', ic('external')),
           p.domain ? h('a', { class: 'btn', href: p.site_url || ('https://' + p.domain), target: '_blank', rel: 'noopener noreferrer' }, 'Abrir o site') : null
         ),
         seg, h('div', { style: null, class: 'hint' }, ' '),
         kv,
-        h('h2', { class: 'sec' }, 'Anotacoes'), notes, h('div', { class: 'actions' }, saveNotes),
-        h('h2', { class: 'sec' }, 'Anuncios (' + d.ads.length + ')'), ads
+        h('h2', { class: 'sec' }, 'Anotações'), notes, h('div', { class: 'actions' }, saveNotes),
+        h('h2', { class: 'sec' }, 'Anúncios (' + d.ads.length + ')'), ads
       )
     );
     drawerEl.classList.add('open');
@@ -550,7 +689,7 @@ function adRow(a) {
         h('span', null, a.days === null || a.days === undefined ? 'sem data' : a.days + ' dias'),
         a.cta ? h('span', null, a.cta) : null,
         a.format ? h('span', null, a.format) : null,
-        a.collation_count > 1 ? h('span', null, a.collation_count + ' versoes') : null,
+        a.collation_count > 1 ? h('span', null, a.collation_count + ' versões') : null,
         h('a', { href: a.library_url, target: '_blank', rel: 'noopener noreferrer' }, 'Biblioteca'),
         a.link_url ? h('a', { href: a.link_url, target: '_blank', rel: 'noopener noreferrer' }, 'Destino') : null
       )
@@ -563,57 +702,91 @@ async function loadRuns() {
   try {
     const [r, dbg] = await Promise.all([api('/api/runs'), isAdmin() ? api('/api/debug') : Promise.resolve({ rows: [] })]);
     S.runs = r.rows;
-    paintRuns(dbg.rows);
+    S.debug = dbg.rows;
+    paintRuns();
+    if (S.runs.length) {
+      const keep = S.runs.find((x) => x.id === S.runSel);
+      showRun((keep || S.runs[0]).id);
+    } else {
+      const d = document.getElementById('rundetail');
+      if (d) d.replaceChildren();
+    }
   } catch (ex) { toast(ex.message, true); }
 }
 
 let runLog = null;
 function viewRuns() {
-  runLog = h('pre', { class: 'log' }, 'Escolha uma rodada para ver o registro.');
-  viewEl.append(h('div', { class: 'runs' }, h('div', { id: 'runlist' }), h('div', null, h('h2', { class: 'sec' }, 'Registro'), runLog, h('div', { id: 'dbg', class: 'debuglist' }))));
+  viewEl.append(h('div', { class: 'runs' },
+    h('div', { class: 'card runlist', id: 'runlist' }),
+    h('div', { class: 'rundetail', id: 'rundetail' })));
   loadRuns();
 }
 
-function paintRuns(debugRows) {
+function paintRuns() {
   const list = document.getElementById('runlist');
   if (!list) return;
-  list.replaceChildren(h('h2', { class: 'sec' }, 'Rodadas'));
-  if (!S.runs.length) { list.append(h('div', { class: 'empty' }, h('b', null, 'Nenhuma rodada'), 'Toque em Rodar agora para a primeira.')); }
-  else {
-    const box = h('div', { class: 'box' });
-    for (const r of S.runs) {
-      const row = h('div', { class: 'runrow', tabindex: '0', onclick: () => showRun(r.id, row) },
-        h('span', { class: 'num dim' }, '#' + r.id),
-        h('div', null,
-          h('div', null, h('span', { class: 'st ' + r.status }, RUN_LABEL[r.status] || r.status), ' ', h('span', { class: 'dim' }, fmtDateTime(r.started_at) + ' ' + fmtDur(r.started_at, r.finished_at))),
-          h('div', { class: 'pmeta num' }, r.searches_done + '/' + r.searches_total + ' buscas, ' + r.deep_done + ' varreduras, ' + r.pages_found + ' paginas (' + r.new_pages + ' novas)'),
-          r.error ? h('div', { class: 'pmeta' }, r.error.slice(0, 120)) : null
-        ),
-        h('span')
-      );
-      row.addEventListener('keydown', (e) => { if (e.key === 'Enter') showRun(r.id, row); });
-      box.append(row);
-    }
-    list.append(box);
+  list.replaceChildren(h('div', { class: 'runhead' }, h('h2', null, 'Rodadas'), h('p', null, 'Histórico de todas as rodadas realizadas.')));
+  if (!S.runs.length) {
+    list.append(h('div', { class: 'empty' }, h('div', { class: 'big' }, ic('refresh')), h('b', null, 'Nenhuma rodada'), h('p', null, 'Toque em Rodar agora para a primeira.')));
+    return;
   }
-  const dbg = document.getElementById('dbg');
-  if (dbg) {
-    dbg.replaceChildren();
-    if (debugRows && debugRows.length) {
-      dbg.append(h('h2', { class: 'sec' }, 'Arquivos de diagnostico'), h('div', { class: 'hint' }, 'Gerados quando a rodada e bloqueada ou volta sem anuncios. Envie para ajustar o minerador.'), h('div'));
-      const wrap = dbg.lastChild;
-      for (const f of debugRows.slice(0, 12)) wrap.append(h('a', { href: '/api/debug/' + encodeURIComponent(f.name), target: '_blank', rel: 'noopener noreferrer' }, f.name));
-    }
+  for (const r of S.runs) {
+    const row = h('div', { class: 'runrow', tabindex: '0', 'data-id': String(r.id), 'aria-selected': String(S.runSel === r.id), onclick: () => showRun(r.id) },
+      h('span', { class: 'id num' }, '#' + String(r.id).padStart(3, '0')),
+      h('div', null,
+        h('div', { class: 'l1' }, h('span', { class: 'badge ' + r.status }, RUN_LABEL[r.status] || r.status), h('span', { class: 'dim' }, fmtDateTime(r.started_at) + (r.finished_at ? ' · ' + fmtDur(r.started_at, r.finished_at) : ''))),
+        h('div', { class: 'l2 num' },
+          h('span', null, ic('search'), r.searches_done + ' buscas'),
+          h('span', null, ic('list'), r.deep_done + ' varreduras'),
+          h('span', null, ic('file'), r.pages_found + ' páginas'),
+          h('span', null, ic('sparkle'), r.new_pages + ' novas'))),
+      h('span', { class: 'go' }, ic('right')));
+    row.addEventListener('keydown', (e) => { if (e.key === 'Enter') showRun(r.id); });
+    list.append(row);
   }
 }
 
-async function showRun(id, row) {
-  for (const el of document.querySelectorAll('.runrow')) el.removeAttribute('aria-selected');
-  row.setAttribute('aria-selected', 'true');
+async function showRun(id) {
+  S.runSel = id;
+  for (const el of document.querySelectorAll('.runrow')) el.setAttribute('aria-selected', String(el.dataset.id === String(id)));
+  const box = document.getElementById('rundetail');
+  if (!box) return;
   try {
     const d = await api('/api/runs/' + id);
-    runLog.textContent = d.log || '(sem registro)';
-    runLog.scrollTop = runLog.scrollHeight;
+    if (S.runSel !== id) return;
+    const when = d.started_at ? new Date(d.started_at * 1000) : null;
+    const sub = when
+      ? 'Início em ' + when.toLocaleDateString('pt-BR') + ' às ' + when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (d.finished_at ? ' · Duração: ' + fmtDur(d.started_at, d.finished_at) : '')
+      : '';
+    const kpi = (icon, value, label) => h('div', { class: 'kpi' }, h('div', { class: 'tile' }, ic(icon)), h('div', null, h('b', { class: 'num' }, String(value)), h('span', null, label)));
+    const rerun = isAdmin() && !(S.status && S.status.running)
+      ? h('button', { class: 'btn', onclick: onRunClick }, ic('refresh'), 'Rodar novamente') : null;
+    const logText = d.log || '(sem registro)';
+    const dlLog = h('button', { class: 'btn small', onclick: () => {
+      const url = URL.createObjectURL(new Blob([logText], { type: 'text/plain;charset=utf-8' }));
+      const a = h('a', { href: url, download: 'rodada-' + String(id).padStart(3, '0') + '.txt' });
+      document.body.append(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } }, ic('download'), 'Baixar log (.txt)');
+    const pre = h('pre', { class: 'log' }, logText);
+    const cards = [
+      h('div', { class: 'card' },
+        h('div', { class: 'rd-head' }, h('div', null, h('h2', null, 'Rodada #' + String(id).padStart(3, '0'), h('span', { class: 'badge ' + d.status }, RUN_LABEL[d.status] || d.status)), h('p', null, sub)), rerun),
+        h('div', { class: 'kpis' }, kpi('search', d.searches_done, 'buscas realizadas'), kpi('list', d.deep_done, 'varreduras'), kpi('file', d.pages_found, 'páginas achadas'), kpi('sparkle', d.new_pages, 'novas páginas'))),
+      h('div', { class: 'card' },
+        h('div', { class: 'logcard-head' }, h('div', null, h('h3', null, 'Registro da rodada'), h('p', null, 'Log completo de execução desta rodada.')), dlLog),
+        pre),
+    ];
+    if (isAdmin() && S.debug && S.debug.length) {
+      const fmtSize = (b) => (b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+      cards.push(h('div', { class: 'card' },
+        h('div', { class: 'logcard-head' }, h('div', null, h('h3', null, 'Arquivos de diagnóstico'), h('p', null, 'Gerados quando a rodada é bloqueada ou volta sem anúncios.'))),
+        h('div', { class: 'files' }, S.debug.slice(0, 12).map((f) =>
+          h('div', { class: 'file' }, ic('file'), h('span', { class: 'nm' }, f.name), h('span', { class: 'sz num' }, fmtSize(f.size)),
+            h('a', { class: 'btn small', href: '/api/debug/' + encodeURIComponent(f.name), target: '_blank', rel: 'noopener noreferrer' }, ic('download'), 'Baixar'))))));
+    }
+    box.replaceChildren(...cards);
+    pre.scrollTop = pre.scrollHeight;
   } catch (ex) { toast(ex.message, true); }
 }
 
@@ -627,7 +800,7 @@ function viewKeywords() {
   const text = h('textarea', { id: 'k-text', placeholder: 'Uma por linha. Use + entre termos:\nbajar de peso + truco + gelatina' });
   const lang = h('select', { id: 'k-lang' }, [['es', 'Espanhol'], ['en', 'Ingles'], ['pt', 'Portugues']].map(([v, l]) => h('option', { value: v }, l)));
   const niche = h('input', { type: 'text', id: 'k-niche', placeholder: 'Emagrecimento', maxlength: '60' });
-  const countries = h('input', { type: 'text', id: 'k-countries', placeholder: 'Vazio usa os paises padrao' });
+  const countries = h('input', { type: 'text', id: 'k-countries', placeholder: 'Vazio usa os países padrão' });
   const add = h('button', { class: 'btn primary', onclick: async () => {
     if (!text.value.trim()) { toast('Escreva ao menos uma palavra-chave.', true); return; }
     try {
@@ -645,11 +818,11 @@ function viewKeywords() {
       field('Palavras-chave', text, 'k-text'),
       field('Idioma', lang, 'k-lang'),
       field('Nicho', niche, 'k-niche'),
-      field('Paises (opcional)', countries, 'k-countries'),
-      h('div', { class: 'hint' }, 'O sinal de + vira espaco na busca. Paises em siglas separadas por virgula, ex: MX, CO.'),
+      field('Países (opcional)', countries, 'k-countries'),
+      h('div', { class: 'hint' }, 'O sinal de + vira espaço na busca. Países em siglas separadas por vírgula, ex: MX, CO.'),
       add
     ),
-    h('div', { id: 'kwlist' })
+    h('div', { id: 'kwlist', class: 'kwlistwrap' })
   ));
   loadKeywords().then(paintKeywords).catch((ex) => toast(ex.message, true));
 }
@@ -680,28 +853,28 @@ function paintKeywords() {
     });
     tbody.append(h('tr', { style: null },
       h('td', { class: 'cb' }, cb),
-      h('td', null, h('div', { class: 'pname' }, k.term), h('div', { class: 'pmeta' }, [k.lang.toUpperCase(), k.niche, k.countries ? k.countries.replace(/,/g, ' ') : 'paises padrao'].filter(Boolean).join(' / '))),
-      h('td', { class: 'num dim' }, String(k.pages) + ' paginas'),
+      h('td', null, h('div', { class: 'pname' }, k.term), h('div', { class: 'pmeta' }, [k.lang.toUpperCase(), k.niche, k.countries ? k.countries.replace(/,/g, ' ') : 'países padrão'].filter(Boolean).join(' / '))),
+      h('td', { class: 'num dim' }, String(k.pages) + (k.pages === 1 ? ' página' : ' páginas')),
       h('td', { class: 'dim' }, k.last_run_at ? ago(k.last_run_at) : 'nunca'),
       h('td', null, on)
     ));
   }
   box.append(bar, h('div', { class: 'tablewrap' }, h('table', { style: null },
-    h('thead', null, h('tr', null, h('th', { class: 'cb' }), h('th', null, 'Palavra-chave'), h('th', null, 'Achou'), h('th', null, 'Ultima busca'), h('th', null, 'Ativa'))),
+    h('thead', null, h('tr', null, h('th', { class: 'cb' }), h('th', null, 'Palavra-chave'), h('th', null, 'Achou'), h('th', null, 'Última busca'), h('th', null, 'Ativa'))),
     tbody)));
 }
 
 /* ---------- ajustes ---------- */
 const NUM_FIELDS = [
-  ['min_ads', 'Anuncios ativos minimos', 'Pagina so passa no criterio com pelo menos esse tanto.'],
-  ['min_days', 'Dias rodando minimos', 'Idade do anuncio mais antigo ainda ativo.'],
+  ['min_ads', 'Anúncios ativos mínimos', 'Página só passa no critério com pelo menos esse tanto.'],
+  ['min_days', 'Dias rodando mínimos', 'Idade do anúncio mais antigo ainda ativo.'],
   ['max_searches_per_run', 'Buscas por rodada', 'Menos buscas, menos risco de bloqueio.'],
-  ['max_deep', 'Varreduras de pagina por rodada', 'Quantas paginas candidatas abrir por completo.'],
-  ['deep_ttl_days', 'Reabrir pagina apos (dias)', 'Evita varrer a mesma pagina toda hora.'],
-  ['scrolls_search', 'Rolagens por busca', 'Mais rolagens trazem mais anuncios e mais tempo.'],
-  ['scrolls_page', 'Rolagens por pagina', ''],
-  ['delay_min', 'Pausa minima (s)', 'Entre uma acao e outra.'],
-  ['delay_max', 'Pausa maxima (s)', ''],
+  ['max_deep', 'Varreduras de página por rodada', 'Quantas páginas candidatas abrir por completo.'],
+  ['deep_ttl_days', 'Reabrir página após (dias)', 'Evita varrer a mesma página toda hora.'],
+  ['scrolls_search', 'Rolagens por busca', 'Mais rolagens trazem mais anúncios e mais tempo.'],
+  ['scrolls_page', 'Rolagens por página', ''],
+  ['delay_min', 'Pausa mínima (s)', 'Entre uma ação e outra.'],
+  ['delay_max', 'Pausa máxima (s)', ''],
   ['schedule_every_hours', 'Intervalo (horas)', 'Usado no modo por intervalo.'],
 ];
 
@@ -724,14 +897,14 @@ async function viewSettings() {
       try { await api('/api/settings', { method: 'PUT', body }); toast('Ajustes salvos.'); refreshCriteria(); } catch (ex) { toast(ex.message, true); }
     } }, 'Salvar ajustes');
     viewEl.append(h('div', { class: 'settings' },
-      h('fieldset', null, h('h2', { class: 'sec' }, 'Criterio e ritmo'), h('div', { class: 'fgrid' }, fields)),
-      h('fieldset', null, h('h2', { class: 'sec' }, 'Paises e agenda (fuso ' + d.timezone + ')'), h('div', { class: 'fgrid' },
-        h('div', null, h('label', { class: 'lbl', for: 's-countries' }, 'Paises padrao'), countries, h('div', { class: 'hint' }, 'Siglas separadas por virgula.')),
+      h('fieldset', null, h('h2', { class: 'sec' }, 'Critério e ritmo'), h('div', { class: 'fgrid' }, fields)),
+      h('fieldset', null, h('h2', { class: 'sec' }, 'Países e agenda (fuso ' + d.timezone + ')'), h('div', { class: 'fgrid' },
+        h('div', null, h('label', { class: 'lbl', for: 's-countries' }, 'Países padrão'), countries, h('div', { class: 'hint' }, 'Siglas separadas por vírgula.')),
         h('div', null, h('label', { class: 'lbl', for: 's-mode' }, 'Rodar sozinho'), mode),
-        h('div', null, h('label', { class: 'lbl', for: 's-time' }, 'Horario (modo diario)'), time)
+        h('div', null, h('label', { class: 'lbl', for: 's-time' }, 'Horário (modo diário)'), time)
       )),
       backupBlock(),
-      h('div', { class: 'hint' }, d.proxy ? 'Proxy configurado no servidor.' : 'Sem proxy. Se o Facebook bloquear o IP da VPS, configure PROXY_SERVER nas variaveis do servico.'),
+      h('div', { class: 'hint' }, d.proxy ? 'Proxy configurado no servidor.' : 'Sem proxy. Se o Facebook bloquear o IP da VPS, configure PROXY_SERVER nas variáveis do serviço.'),
       h('div', null, save)
     ));
   } catch (ex) { toast(ex.message, true); }
@@ -754,8 +927,8 @@ function backupBlock() {
       const st = await api('/api/backup/status');
       drive.classList.toggle('hidden', !st.drive);
       const parts = [];
-      parts.push(st.drive ? 'Drive ligado: um backup automatico por dia, depois das 04:30.' : 'Drive desligado. Para ligar, defina BACKUP_WEBHOOK_URL e BACKUP_KEY no EasyPanel.');
-      if (st.last) parts.push('Ultimo envio: ' + fmtDateTime(Math.floor(st.last.at)) + ' (' + (st.last.ok ? 'ok' : 'falhou') + '). ' + st.last.message);
+      parts.push(st.drive ? 'Drive ligado: um backup automático por dia, depois das 04:30.' : 'Drive desligado. Para ligar, defina BACKUP_WEBHOOK_URL e BACKUP_KEY no EasyPanel.');
+      if (st.last) parts.push('Último envio: ' + fmtDateTime(Math.floor(st.last.at)) + ' (' + (st.last.ok ? 'ok' : 'falhou') + '). ' + st.last.message);
       info.textContent = parts.join(' ');
     } catch { info.textContent = ''; }
   }
@@ -774,7 +947,7 @@ function viewAccount() {
 
   if (S.user && S.user.env) {
     wrap.append(h('fieldset', null, h('h2', { class: 'sec' }, 'Sua conta'),
-      h('div', { class: 'hint' }, 'Voce entra como administrador (' + S.user.username + '). A senha dele e definida na variavel ADMIN_PASSWORD no EasyPanel.')));
+      h('div', { class: 'hint' }, 'Você entra como administrador (' + S.user.username + '). A senha dele é definida na variável ADMIN_PASSWORD no EasyPanel.')));
   } else {
     const cur = h('input', { type: 'password', id: 'pw-cur', autocomplete: 'current-password' });
     const nxt = h('input', { type: 'password', id: 'pw-new', autocomplete: 'new-password' });
@@ -788,7 +961,7 @@ function viewAccount() {
     wrap.append(h('fieldset', null, h('h2', { class: 'sec' }, 'Sua conta (' + (S.user ? S.user.username : '') + ')'),
       h('div', { class: 'fgrid' },
         h('div', null, h('label', { class: 'lbl', for: 'pw-cur' }, 'Senha atual'), cur),
-        h('div', null, h('label', { class: 'lbl', for: 'pw-new' }, 'Nova senha (minimo 8)'), nxt)),
+        h('div', null, h('label', { class: 'lbl', for: 'pw-new' }, 'Nova senha (mínimo 8)'), nxt)),
       h('div', { style: null, class: 'hint' }, ' '), btn));
   }
 
@@ -803,18 +976,18 @@ async function loadUsers(box) {
     const d = await api('/api/users');
     box.replaceChildren();
     const un = h('input', { type: 'text', id: 'nu-user', autocapitalize: 'none', spellcheck: 'false', placeholder: 'ex: joao' });
-    const pw = h('input', { type: 'text', id: 'nu-pass', autocomplete: 'off', placeholder: 'minimo 8 caracteres' });
+    const pw = h('input', { type: 'text', id: 'nu-pass', autocomplete: 'off', placeholder: 'mínimo 8 caracteres' });
     const add = h('button', { class: 'btn primary', onclick: async () => {
       try {
         await api('/api/users', { method: 'POST', body: { username: un.value, password: pw.value } });
-        toast('Usuario criado. Passe o usuario e a senha para a pessoa.');
+        toast('Usuário criado. Passe o usuário e a senha para a pessoa.');
         loadUsers(box);
       } catch (ex) { toast(ex.message, true); }
-    } }, 'Criar usuario');
+    } }, 'Criar usuário');
     box.append(
-      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar e exportar. Rodar, palavras-chave, ajustes e acessos ficam so com voce (' + d.admin + ').'),
+      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar e exportar. Rodar, palavras-chave, ajustes e acessos ficam só com você (' + d.admin + ').'),
       h('div', { class: 'fgrid', style: null },
-        h('div', null, h('label', { class: 'lbl', for: 'nu-user' }, 'Usuario'), un),
+        h('div', null, h('label', { class: 'lbl', for: 'nu-user' }, 'Usuário'), un),
         h('div', null, h('label', { class: 'lbl', for: 'nu-pass' }, 'Senha inicial'), pw)),
       h('div', { class: 'actions' }, add)
     );
@@ -827,22 +1000,22 @@ async function loadUsers(box) {
         catch (ex) { toast(ex.message, true); on.checked = !on.checked; }
       });
       const reset = h('button', { class: 'btn small', onclick: async () => {
-        const np = prompt('Nova senha para ' + u.username + ' (minimo 8 caracteres):');
+        const np = prompt('Nova senha para ' + u.username + ' (mínimo 8 caracteres):');
         if (!np) return;
         try { await api('/api/users/' + u.id, { method: 'PATCH', body: { password: np } }); toast('Senha redefinida.'); } catch (ex) { toast(ex.message, true); }
       } }, 'Redefinir senha');
       const del = h('button', { class: 'btn small danger', onclick: async () => {
-        if (!confirm('Apagar o usuario ' + u.username + '?')) return;
+        if (!confirm('Apagar o usuário ' + u.username + '?')) return;
         try { await api('/api/users/' + u.id, { method: 'DELETE' }); loadUsers(box); } catch (ex) { toast(ex.message, true); }
       } }, 'Apagar');
       tbody.append(h('tr', { style: null },
-        h('td', null, h('div', { class: 'pname' }, u.username), h('div', { class: 'pmeta' }, 'ultimo acesso: ' + (u.last_login_at ? ago(u.last_login_at) : 'nunca'))),
+        h('td', null, h('div', { class: 'pname' }, u.username), h('div', { class: 'pmeta' }, 'último acesso: ' + (u.last_login_at ? ago(u.last_login_at) : 'nunca'))),
         h('td', null, on),
         h('td', null, h('div', { class: 'actions', style: null }, reset, del))
       ));
     }
     box.append(h('div', { class: 'tablewrap' }, h('table', { style: null },
-      h('thead', null, h('tr', null, h('th', null, 'Usuario'), h('th', null, 'Ativo'), h('th', null, ''))), tbody)));
+      h('thead', null, h('tr', null, h('th', null, 'Usuário'), h('th', null, 'Ativo'), h('th', null, ''))), tbody)));
   } catch (ex) { toast(ex.message, true); }
 }
 

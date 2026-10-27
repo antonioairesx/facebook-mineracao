@@ -32,6 +32,7 @@ const STATIC = {
   '/index.html': ['index.html', 'text/html; charset=utf-8'],
   '/app.css': ['app.css', 'text/css; charset=utf-8'],
   '/app.js': ['app.js', 'text/javascript; charset=utf-8'],
+  '/theme.js': ['theme.js', 'text/javascript; charset=utf-8'],
   '/favicon.svg': ['favicon.svg', 'image/svg+xml'],
 };
 
@@ -84,11 +85,11 @@ app.addHook('onRequest', async (req, reply) => {
   const url = req.url.split('?')[0];
   if (!url.startsWith('/api/')) return;
   if (req.method !== 'GET' && req.headers['x-garimpo'] !== '1') {
-    return reply.code(403).send({ error: 'Requisicao recusada.' });
+    return reply.code(403).send({ error: 'Requisição recusada.' });
   }
   if (OPEN_API.has(url)) return;
   const user = resolveUser(req);
-  if (!user) return reply.code(401).send({ error: 'Sessao expirada. Entre de novo.' });
+  if (!user) return reply.code(401).send({ error: 'Sessão expirada. Entre de novo.' });
   if (adminOnly(req.method, url) && user.role !== 'admin') {
     return reply.code(403).send({ error: 'Somente o administrador pode fazer isso.' });
   }
@@ -112,7 +113,7 @@ app.post('/api/login', async (req, reply) => {
   const password = typeof body.password === 'string' ? body.password : '';
   const fail = () => {
     registerFailure(ip);
-    return reply.code(401).send({ error: 'Usuario ou senha incorretos.' });
+    return reply.code(401).send({ error: 'Usuário ou senha incorretos.' });
   };
   if (!username || !password) return fail();
 
@@ -143,7 +144,7 @@ app.post('/api/logout', async (req, reply) => {
 // troca da propria senha (o admin das variaveis de ambiente troca la no EasyPanel)
 app.post('/api/me/password', async (req, reply) => {
   if (req.user.env) {
-    return reply.code(400).send({ error: 'A senha do administrador e definida em ADMIN_PASSWORD no EasyPanel.' });
+    return reply.code(400).send({ error: 'A senha do administrador é definida em ADMIN_PASSWORD no EasyPanel.' });
   }
   const { current, next } = req.body || {};
   if (typeof next !== 'string' || next.length < 8 || next.length > 200) {
@@ -173,17 +174,17 @@ app.get('/api/users', async () => ({
 app.post('/api/users', async (req, reply) => {
   const { username, password } = req.body || {};
   if (typeof username !== 'string' || !USERNAME_RE.test(username.trim())) {
-    return reply.code(400).send({ error: 'Usuario de 3 a 30 caracteres: letras, numeros, ponto, hifen ou sublinhado.' });
+    return reply.code(400).send({ error: 'Usuário de 3 a 30 caracteres: letras, números, ponto, hífen ou sublinhado.' });
   }
   if (typeof password !== 'string' || password.length < 8 || password.length > 200) {
     return reply.code(400).send({ error: 'A senha precisa ter de 8 a 200 caracteres.' });
   }
   const name = username.trim();
   if (name.toLowerCase() === config.adminUser.toLowerCase()) {
-    return reply.code(400).send({ error: 'Esse nome e reservado para o administrador.' });
+    return reply.code(400).send({ error: 'Esse nome é reservado para o administrador.' });
   }
   if (db.prepare('SELECT 1 FROM users WHERE username = ?').get(name)) {
-    return reply.code(409).send({ error: 'Ja existe um usuario com esse nome.' });
+    return reply.code(409).send({ error: 'Já existe um usuário com esse nome.' });
   }
   const info = db
     .prepare("INSERT INTO users(username, pass_hash, role, active, created_at) VALUES (?, ?, 'member', 1, ?)")
@@ -194,7 +195,7 @@ app.post('/api/users', async (req, reply) => {
 app.patch('/api/users/:id', async (req, reply) => {
   const id = Number(req.params.id);
   const u = db.prepare('SELECT id FROM users WHERE id = ?').get(id);
-  if (!u) return reply.code(404).send({ error: 'Usuario nao encontrado.' });
+  if (!u) return reply.code(404).send({ error: 'Usuário não encontrado.' });
   const body = req.body || {};
   if (body.active !== undefined) {
     db.prepare('UPDATE users SET active = ? WHERE id = ?').run(body.active ? 1 : 0, id);
@@ -330,7 +331,7 @@ app.get('/api/pages/:id', async (req, reply) => {
   const row = db
     .prepare(`SELECT * FROM (${PAGES_BASE}) WHERE page_id = ?`)
     .get(String(req.params.id));
-  if (!row) return reply.code(404).send({ error: 'Pagina nao encontrada.' });
+  if (!row) return reply.code(404).send({ error: 'Página não encontrada.' });
   const ads = db
     .prepare(
       `SELECT ad_id, start_date, end_date, is_active, body, title, cta, link_url, domain, format,
@@ -354,7 +355,7 @@ app.patch('/api/pages/:id', async (req, reply) => {
   const sets = [];
   const params = [];
   if (body.status !== undefined) {
-    if (!STATUSES.includes(body.status)) return reply.code(400).send({ error: 'Status invalido.' });
+    if (!STATUSES.includes(body.status)) return reply.code(400).send({ error: 'Status inválido.' });
     sets.push('status = ?');
     params.push(body.status);
   }
@@ -364,14 +365,14 @@ app.patch('/api/pages/:id', async (req, reply) => {
   }
   if (!sets.length) return reply.code(400).send({ error: 'Nada para atualizar.' });
   const info = db.prepare(`UPDATE pages SET ${sets.join(', ')} WHERE page_id = ?`).run(...params, String(req.params.id));
-  if (!info.changes) return reply.code(404).send({ error: 'Pagina nao encontrada.' });
+  if (!info.changes) return reply.code(404).send({ error: 'Página não encontrada.' });
   return { ok: true };
 });
 
 app.post('/api/pages/bulk', async (req, reply) => {
   const { ids, status } = req.body || {};
   if (!Array.isArray(ids) || !ids.length || !STATUSES.includes(status)) {
-    return reply.code(400).send({ error: 'Pedido invalido.' });
+    return reply.code(400).send({ error: 'Pedido inválido.' });
   }
   const stmt = db.prepare('UPDATE pages SET status = ? WHERE page_id = ?');
   db.exec('BEGIN');
@@ -392,16 +393,16 @@ app.get('/api/export.csv', async (req, reply) => {
   const fmt = (t) => (t ? new Date(t * 1000).toISOString().slice(0, 10) : '');
   const csv = toCsv(
     [
-      'Pagina',
-      'Link da pagina na Biblioteca',
-      'Anuncios ativos',
+      'Página',
+      'Link da página na Biblioteca',
+      'Anúncios ativos',
       'Criativos distintos',
       'Dias ativo (mais antigo)',
-      'Dominio',
+      'Domínio',
       'Site de destino',
-      'Paises',
+      'Países',
       'Palavras-chave',
-      'Passa no criterio',
+      'Passa no critério',
       'Status',
       'Primeira vez visto',
       'Exemplo de texto',
@@ -416,7 +417,7 @@ app.get('/api/export.csv', async (req, reply) => {
       r.site_url,
       r.countries.join(' '),
       r.terms.join(' | '),
-      r.qualifies ? 'sim' : 'nao',
+      r.qualifies ? 'sim' : 'não',
       r.status,
       fmt(r.first_seen),
       r.sample_text.replace(/\s+/g, ' ').slice(0, 300),
@@ -496,7 +497,7 @@ app.delete('/api/keywords/:id', async (req) => {
 app.post('/api/keywords/bulk', async (req, reply) => {
   const { action, ids } = req.body || {};
   if (!Array.isArray(ids) || !ids.length || !['activate', 'deactivate', 'delete'].includes(action)) {
-    return reply.code(400).send({ error: 'Pedido invalido.' });
+    return reply.code(400).send({ error: 'Pedido inválido.' });
   }
   db.exec('BEGIN');
   try {
@@ -540,7 +541,7 @@ app.get('/api/runs', async () => ({
 
 app.get('/api/runs/:id', async (req, reply) => {
   const row = db.prepare('SELECT * FROM runs WHERE id = ?').get(Number(req.params.id));
-  if (!row) return reply.code(404).send({ error: 'Rodada nao encontrada.' });
+  if (!row) return reply.code(404).send({ error: 'Rodada não encontrada.' });
   return row;
 });
 
@@ -584,24 +585,24 @@ app.put('/api/settings', async (req, reply) => {
     if (body[k] === undefined) continue;
     const n = Number(body[k]);
     if (!Number.isFinite(n) || n < lo || n > hi) {
-      return reply.code(400).send({ error: `Valor invalido em ${k} (aceita de ${lo} a ${hi}).` });
+      return reply.code(400).send({ error: `Valor inválido em ${k} (aceita de ${lo} a ${hi}).` });
     }
     patch[k] = Math.round(n);
   }
   if (body.default_countries !== undefined) {
     const cs = parseCountries(body.default_countries);
-    if (!cs.length) return reply.code(400).send({ error: 'Informe ao menos um pais (ex: MX, CO).' });
+    if (!cs.length) return reply.code(400).send({ error: 'Informe ao menos um país (ex: MX, CO).' });
     patch.default_countries = cs.join(',');
   }
   if (body.schedule_mode !== undefined) {
     if (!['off', 'daily', 'interval'].includes(body.schedule_mode)) {
-      return reply.code(400).send({ error: 'Modo de agendamento invalido.' });
+      return reply.code(400).send({ error: 'Modo de agendamento inválido.' });
     }
     patch.schedule_mode = body.schedule_mode;
   }
   if (body.schedule_time !== undefined) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(body.schedule_time)) {
-      return reply.code(400).send({ error: 'Horario invalido (use HH:MM).' });
+      return reply.code(400).send({ error: 'Horário inválido (use HH:MM).' });
     }
     patch.schedule_time = body.schedule_time;
   }
@@ -648,9 +649,9 @@ app.get('/api/debug', async () => {
 
 app.get('/api/debug/:file', async (req, reply) => {
   const f = String(req.params.file);
-  if (!DEBUG_NAME.test(f)) return reply.code(400).send({ error: 'Arquivo invalido.' });
+  if (!DEBUG_NAME.test(f)) return reply.code(400).send({ error: 'Arquivo inválido.' });
   const full = path.join(DEBUG_DIR, f);
-  if (!fs.existsSync(full)) return reply.code(404).send({ error: 'Arquivo nao encontrado.' });
+  if (!fs.existsSync(full)) return reply.code(404).send({ error: 'Arquivo não encontrado.' });
   reply.header('Content-Type', f.endsWith('.png') ? 'image/png' : 'application/json; charset=utf-8');
   return fs.readFileSync(full);
 });
@@ -658,7 +659,7 @@ app.get('/api/debug/:file', async (req, reply) => {
 // ---------- arquivos estaticos ----------
 app.get('/*', async (req, reply) => {
   const url = req.url.split('?')[0];
-  if (url.startsWith('/api/')) return reply.code(404).send({ error: 'Rota nao encontrada.' });
+  if (url.startsWith('/api/')) return reply.code(404).send({ error: 'Rota não encontrada.' });
   const hit = STATIC[url];
   if (!hit) return reply.code(404).type('text/plain').send('Nao encontrado');
   const file = path.join(PUBLIC_DIR, hit[0]);
