@@ -1,6 +1,8 @@
 import { openDb, now, tx } from './db.js';
 import { summarizeAds } from './parser.js';
 import { pageLibraryLink } from './crawler.js';
+import { classifyAd, classifyPage, scorePage } from './classify.js';
+import { cacheThumbs } from './thumbs.js';
 
 // Grava os anuncios capturados de UMA pagina anunciante.
 // deep = true quando veio da visita a pagina inteira (numeros confiaveis).
@@ -127,7 +129,38 @@ export function savePageFromAds({ pageId, pageName, profileUri, ads, total, deep
     }
   });
 
+  refreshDerived(pageId, deep);
+  if (deep) cacheThumbs(ads);
   return isNew;
+}
+
+// tipo de oferta, placar e historico de anuncios ativos (para saber quem esta escalando)
+export function refreshDerived(pageId, snapshot = false) {
+  const d = openDb();
+  const p = d.prepare('SELECT ads_active, ads_groups, oldest_start, domain FROM pages WHERE page_id = ?').get(pageId);
+  if (!p) return;
+  const ads = d
+    .prepare('SELECT link_url, domain, cta, body, title, start_date FROM ads WHERE page_id = ? AND is_active = 1')
+    .all(pageId);
+  const offer = classifyPage(ads.map((a) => ({ offer_type: classifyAd(a) })));
+  const t = now();
+  const new7 = ads.filter((a) => a.start_date && a.start_date >= t - 7 * 86400).length;
+  const days = p.oldest_start ? Math.floor((t - p.oldest_start) / 86400) : 0;
+  const score = scorePage({ ads_active: p.ads_active, ads_groups: p.ads_groups, days, new7, offer_type: offer, domain: p.domain });
+  d.prepare('UPDATE pages SET offer_type = ?, score = ? WHERE page_id = ?').run(offer, score, pageId);
+  if (snapshot) {
+    const last = d.prepare('SELECT rowid AS rid, at FROM page_snapshots WHERE page_id = ? ORDER BY at DESC LIMIT 1').get(pageId);
+    if (last && t - last.at < 12 * 3600) {
+      d.prepare('UPDATE page_snapshots SET at = ?, ads_active = ?, ads_groups = ? WHERE rowid = ?').run(t, p.ads_active, p.ads_groups, last.rid);
+    } else {
+      d.prepare('INSERT INTO page_snapshots(page_id, at, ads_active, ads_groups) VALUES (?, ?, ?, ?)').run(pageId, t, p.ads_active, p.ads_groups);
+    }
+  }
+}
+
+export function recomputeAllDerived() {
+  const d = openDb();
+  for (const r of d.prepare('SELECT page_id FROM pages').all()) refreshDerived(r.page_id, false);
 }
 
 export function groupByPage(ads) {

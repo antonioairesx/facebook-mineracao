@@ -21,6 +21,9 @@ function localParts() {
 export function tick() {
   if (isRunning()) return;
   const s = getSettings();
+  // depois de um bloqueio, espera 6 horas antes de rodar sozinho de novo
+  const lastRun = openDb().prepare('SELECT status, finished_at FROM runs ORDER BY id DESC LIMIT 1').get();
+  if (lastRun && lastRun.status === 'bloqueada' && lastRun.finished_at && now() - lastRun.finished_at < 6 * 3600) return;
   const mode = s.schedule_mode;
   if (mode === 'daily') {
     const { date, time } = localParts();

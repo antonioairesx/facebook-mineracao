@@ -248,10 +248,12 @@ h2.sec { font-size: 13px; font-weight: 600; letter-spacing: .06em; text-transfor
 @media (max-width: 520px) { .stat { padding: 12px; gap: 10px; } .stat .tile { width: 40px; height: 40px; font-size: 20px; } .stat b { font-size: 22px; } }
 
 /* filtros */
-.filters { display: grid; grid-template-columns: minmax(200px, 1.6fr) minmax(160px, .9fr) repeat(3, minmax(90px, .6fr)) minmax(150px, 1fr) minmax(150px, auto); gap: 14px; align-items: end; padding: 18px; margin-bottom: 18px; }
+.filters { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 14px; align-items: end; padding: 18px; margin-bottom: 18px; }
+.filters .wide { grid-column: span 2; }
+.filters .checks { grid-column: span 6; display: flex; gap: 28px; flex-wrap: wrap; }
 .filters .chk { display: flex; align-items: center; gap: 10px; min-height: 40px; color: var(--dim); font-size: 14px; line-height: 1.2; }
-@media (max-width: 1200px) { .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
-@media (max-width: 640px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; } }
+@media (max-width: 1200px) { .filters { grid-template-columns: repeat(3, minmax(0, 1fr)); } .filters .checks { grid-column: span 3; } }
+@media (max-width: 640px) { .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 14px; } .filters .wide, .filters .checks { grid-column: span 2; } }
 
 .bulkbar { display: flex; gap: 10px; align-items: center; padding: 14px 18px; min-height: 66px; color: var(--text); font-size: 14px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .bulkbar .spacer { margin-left: auto; }
@@ -399,3 +401,40 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+
+/* placar, chips extras */
+.score { display: inline-grid; place-items: center; min-width: 42px; height: 30px; padding: 0 8px; border-radius: 8px; font-weight: 700; font-variant-numeric: tabular-nums; background: var(--sunk); color: var(--dim); }
+.score.hi { background: var(--tint); color: var(--link); }
+.score.mid { background: var(--sunk); color: var(--text); }
+.chip.scale { background: var(--new-pill); color: var(--new-pill-ink); font-weight: 600; display: inline-flex; align-items: center; gap: 5px; }
+.chip.scale .ic { width: 13px; height: 13px; }
+.chip.offer { background: var(--tint); color: var(--link); }
+.chip.tag { background: transparent; border: 1px solid var(--line); color: var(--dim); }
+.chip.tag.removable { display: inline-flex; align-items: center; gap: 4px; padding-right: 4px; }
+.chip.tag.removable button { background: none; border: 0; cursor: pointer; color: var(--faint); display: grid; place-items: center; padding: 2px; border-radius: 50%; }
+.chip.tag.removable button:hover { color: var(--text); background: var(--sunk); }
+.chip.tag.removable .ic { width: 12px; height: 12px; }
+.tagbox { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 18px; }
+.tagbox input { width: 190px; height: 34px; }
+.sechead { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-top: 4px; }
+.statusseg.small { margin-bottom: 0; }
+.statusseg.small button { padding: 5px 10px; font-size: 13px; }
+.linkbtn { background: none; border: 0; padding: 0; color: var(--link); cursor: pointer; font: inherit; display: inline-flex; align-items: center; gap: 5px; }
+.linkbtn .ic { width: 13px; height: 13px; }
+.ad { grid-template-columns: 88px 1fr; }
+.ad .thumb { width: 88px; height: 88px; }
+.rd-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* aviso de bloqueio */
+.alertwrap:empty { display: none; }
+.alertwrap { padding: 14px 24px 0; }
+.alertbar { display: flex; align-items: flex-start; gap: 14px; padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--surface); }
+.alertbar.blocked { background: var(--bad-bg); border-color: var(--coral); }
+.alertbar.failed { background: var(--new-pill); border-color: var(--line); }
+.alertbar .ai { color: var(--coral); display: grid; padding-top: 2px; }
+.alertbar .ai .ic { width: 20px; height: 20px; }
+.alertbar .at { flex: 1; min-width: 0; }
+.alertbar .at p { margin: 4px 0 0; color: var(--dim); font-size: 14px; }
+.alertbar .aa { display: flex; gap: 8px; flex: none; }
+@media (max-width: 640px) { .alertwrap { padding: 12px 12px 0; } .alertbar { flex-wrap: wrap; } .alertbar .aa { width: 100%; } }

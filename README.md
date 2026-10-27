@@ -45,3 +45,16 @@ O minerador le a parte publica da Biblioteca de Anuncios, que nao tem API oficia
 ## Backup
 
 Em **Ajustes** o administrador baixa o banco quando quiser (arquivo `.db.gz`). Para envio automatico ao Google Drive, defina no EasyPanel `BACKUP_WEBHOOK_URL` (endereco do Apps Script) e `BACKUP_KEY` (chave secreta, igual a do script). Um backup por dia sai depois das 04:30 e o script guarda os 14 mais recentes na pasta `Backups Garimpo` do Drive. O app tambem guarda os 7 mais recentes em `/data/backups`.
+
+## Recursos de busca e triagem
+
+- **Busca larga (padrão):** palavra com 3 ou mais termos (`bajar de peso + truco + gelatina`) busca pelos 2 primeiros e usa os demais como filtro no texto do anúncio. Em Ajustes dá para voltar para a busca exata.
+- **Tipo de oferta:** classificado pelo link de destino e pelo texto do anúncio (checkout direto, VSL, quiz, página de vendas, loja, WhatsApp, app). É heurística, serve para triar.
+- **Placar (0 a 100):** anúncios ativos, dias rodando, criativos distintos, anúncios novos em 7 dias, tipo de oferta e site identificado.
+- **Escalando:** página que ganhou 3 ou mais anúncios desde a leitura anterior ou lançou 5 ou mais em 7 dias.
+- **Prioridade:** quando as buscas não cabem na rodada, vão primeiro as palavras nunca rodadas e as que mais trouxeram páginas boas.
+- **Retomar rodada:** em Rodadas, o botão retoma uma rodada interrompida, cancelada ou com erro do ponto em que parou.
+- **Bloqueio:** aviso no topo do painel e pausa de 6 horas nas rodadas automáticas.
+- **Etiquetas, nichos e ofertas:** filtros na aba Páginas. Miniaturas dos criativos ficam guardadas em `/data/thumbs`.
+- **Relatório diário em PDF:** gerado ao fim de cada rodada concluída (`/data/reports`), ou sob demanda pelo botão Relatório PDF.
+- **Navegador:** se o Chromium não estiver na máquina, o app instala sozinho na primeira rodada. No EasyPanel, use o método de construção Dockerfile.

@@ -4,8 +4,11 @@ const toastEl = document.getElementById('toast');
 
 const S = {
   tab: 'paginas',
-  filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false },
-  sort: 'ads_active',
+  filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false },
+  facets: { niches: [], tags: [], offers: [] },
+  reports: [],
+  alertDismissed: 0,
+  sort: 'score',
   dir: 'desc',
   limit: 100,
   rows: [],
@@ -67,6 +70,11 @@ const ICONS = {
   file: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6'],
   updown: ['m7 15 5 5 5-5', 'm7 9 5-5 5 5'],
   x: ['M18 6 6 18', 'M6 6l12 12'],
+  trend: ['M22 7 13.5 15.5l-5-5L2 17', 'M16 7h6v6'],
+  tag: ['M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8Z', 'M7.5 7.5h.01'],
+  copy: ['M8 8h12a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H8a1 1 0 0 1-1-1V9a1 1 0 0 1 1-1Z', 'M16 8V4a1 1 0 0 0-1-1H4a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h3'],
+  alert: ['M12 9v4', 'M12 17h.01', 'M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z'],
+  play2: ['m5 3 14 9-14 9V3Z'],
   sparkle: ['M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z'],
   doc: ['M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8Z', 'M14 2v6h6', 'M8 13h8', 'M8 17h8'],
 };
@@ -248,6 +256,7 @@ const TABS_ALL = [['paginas', 'Páginas', false], ['rodadas', 'Rodadas', false],
 const tabsFor = () => TABS_ALL.filter(([, , adminOnly]) => !adminOnly || isAdmin());
 
 let themeBtnEl = null;
+let alertEl = null;
 function renderShell() {
   root.replaceChildren();
   const tabs = h('div', { class: 'tabs', role: 'tablist' },
@@ -265,8 +274,9 @@ function renderShell() {
       themeButton(),
       h('button', { class: 'btn ghost small', onclick: logout }, ic('logout'), 'Sair'))
   );
+  alertEl = h('div', { class: 'alertwrap' });
   viewEl = h('main');
-  root.append(top, viewEl, buildDrawer());
+  root.append(top, alertEl, viewEl, buildDrawer());
   paintRunState();
   renderTab();
 }
@@ -322,6 +332,36 @@ function paintRunState() {
     }
   }
   setRunBtn(!!st.running);
+  paintAlert();
+}
+
+function paintAlert() {
+  if (!alertEl) return;
+  alertEl.replaceChildren();
+  const st = S.status;
+  const a = st && !st.running ? st.alert : null;
+  if (!a || S.alertDismissed === a.run_id) return;
+  const blocked = a.kind === 'bloqueada';
+  const title = blocked ? 'O Facebook bloqueou a última rodada (#' + a.run_id + ', ' + ago(a.at) + ')' : 'A última rodada terminou com erro (#' + a.run_id + ', ' + ago(a.at) + ')';
+  const lines = [];
+  if (a.error) lines.push('Motivo: ' + a.error + '.');
+  if (blocked) {
+    if (isAdmin()) {
+      lines.push('O app só roda sozinho de novo depois de 6 horas. O que fazer: espere 24 a 48 horas, baixe as Buscas por rodada em Ajustes (por exemplo para 30) e aumente a pausa mínima.');
+      lines.push(a.proxy ? 'Já tem proxy configurado: se repetir, troque o IP do proxy.' : 'Se repetir, a saída é usar um proxy residencial (variável PROXY_SERVER no EasyPanel).');
+    } else {
+      lines.push('A coleta fica pausada por algumas horas para proteger o acesso.');
+    }
+  } else if (isAdmin()) {
+    lines.push('Veja o registro e os arquivos de diagnóstico na aba Rodadas. Dá para retomar de onde parou.');
+  }
+  const actions = [];
+  if (isAdmin()) actions.push(h('button', { class: 'btn small', onclick: () => { setTab('rodadas'); S.runSel = a.run_id; } }, 'Ver a rodada'));
+  actions.push(h('button', { class: 'btn small ghost', onclick: () => { S.alertDismissed = a.run_id; paintAlert(); } }, 'Entendi'));
+  alertEl.append(h('div', { class: 'alertbar ' + (blocked ? 'blocked' : 'failed'), role: 'alert' },
+    h('span', { class: 'ai' }, ic('alert')),
+    h('div', { class: 'at' }, h('b', null, title), h('p', null, lines.join(' '))),
+    h('div', { class: 'aa' }, actions)));
 }
 
 async function refreshStatus() {
@@ -372,6 +412,10 @@ function queryString() {
   if (f.country) p.set('country', f.country);
   if (f.term) p.set('term', f.term);
   if (f.only) p.set('qualifies', '1');
+  if (f.niche) p.set('niche', f.niche);
+  if (f.offer) p.set('offer', f.offer);
+  if (f.tag) p.set('tag', f.tag);
+  if (f.scaling) p.set('scaling', '1');
   p.set('sort', S.sort);
   p.set('dir', S.dir);
   return p;
@@ -402,6 +446,24 @@ function viewPages() {
   term.addEventListener('change', () => { f.term = term.value; loadPages(); });
   const only = h('input', { type: 'checkbox', id: 'f-only', checked: f.only });
   only.addEventListener('change', () => { f.only = only.checked; loadPages(); });
+  const scaling = h('input', { type: 'checkbox', id: 'f-scaling', checked: f.scaling });
+  scaling.addEventListener('change', () => { f.scaling = scaling.checked; loadPages(); });
+  const niche = h('select', { id: 'f-niche' }, h('option', { value: '' }, 'Todos os nichos'));
+  niche.addEventListener('change', () => { f.niche = niche.value; loadPages(); });
+  const offer = h('select', { id: 'f-offer' }, h('option', { value: '' }, 'Todas as ofertas'));
+  offer.addEventListener('change', () => { f.offer = offer.value; loadPages(); });
+  const tag = h('select', { id: 'f-tag' }, h('option', { value: '' }, 'Todas as etiquetas'));
+  tag.addEventListener('change', () => { f.tag = tag.value; loadPages(); });
+  const fillFacets = () => {
+    const fill = (sel, items, cur, first) => {
+      sel.replaceChildren(h('option', { value: '' }, first), ...items.map(([v, l]) => h('option', { value: v, selected: cur === v }, l)));
+    };
+    fill(niche, S.facets.niches.map((n) => [n, n]), f.niche, 'Todos os nichos');
+    fill(offer, S.facets.offers.map((o) => [o.type, o.label + ' (' + o.n + ')']), f.offer, 'Todas as ofertas');
+    fill(tag, S.facets.tags.map((t) => [t.tag, t.tag + ' (' + t.n + ')']), f.tag, 'Todas as etiquetas');
+  };
+  S.fillFacets = fillFacets;
+  loadFacets().then(fillFacets);
 
   const field = (label, el, id) => h('div', null, h('label', { class: 'lbl', for: id }, label), el);
   summaryBox = h('div', { class: 'summary' });
@@ -410,13 +472,18 @@ function viewPages() {
   viewEl.append(
     summaryBox,
     h('div', { class: 'card filters' },
-      field('Buscar', h('div', { class: 'fieldicon' }, ic('search'), q), 'f-q'),
+      h('div', { class: 'wide' }, field('Buscar', h('div', { class: 'fieldicon' }, ic('search'), q), 'f-q')),
       field('Status', status, 'f-status'),
       field('Anúncios (mín.)', minAds, 'f-ads'),
       field('Dias (mín.)', minDays, 'f-days'),
       field('País', country, 'f-country'),
-      field('Palavra-chave', term, 'f-term'),
-      h('label', { class: 'chk', for: 'f-only' }, only, 'Só os que passam no critério')
+      h('div', { class: 'wide' }, field('Palavra-chave', term, 'f-term')),
+      field('Nicho', niche, 'f-niche'),
+      field('Oferta', offer, 'f-offer'),
+      field('Etiqueta', tag, 'f-tag'),
+      h('div', { class: 'checks' },
+        h('label', { class: 'chk', for: 'f-only' }, only, 'Só os que passam no critério'),
+        h('label', { class: 'chk', for: 'f-scaling' }, scaling, 'Só escalando'))
     ),
     h('div', { class: 'card tablecard' }, bulkBox, pagesBox)
   );
@@ -439,6 +506,10 @@ function paintSummary() {
       h('div', { class: 'tile' }, ic('target')),
       h('div', null, h('small', null, 'Critério atual'), h('span', { class: 'crit num' }, S.criteria.min_ads + '+ anúncios e ' + S.criteria.min_days + '+ dias')))
   );
+}
+
+async function loadFacets() {
+  try { S.facets = await api('/api/facets'); } catch { /* filtros extras ficam vazios */ }
 }
 
 async function loadPages(append) {
@@ -480,6 +551,15 @@ function barCell(value, max, threshold, hit) {
   return h('div', { class: 'barcell' }, h('span', { class: 'v num' }, value === null || value === undefined ? '-' : String(value)), track);
 }
 
+function scoreBadge(score) {
+  const tier = score >= 75 ? 'hi' : score >= 50 ? 'mid' : 'lo';
+  return h('span', { class: 'score ' + tier, title: 'Placar de 0 a 100: anúncios ativos, dias, criativos, novos em 7 dias e tipo de oferta' }, String(score));
+}
+function scaleText(r) {
+  if (r.delta !== null && r.delta > 0) return 'escalando +' + r.delta;
+  return r.new7 + ' novos em 7 dias';
+}
+
 function paintTable() {
   pagesBox.replaceChildren();
   if (!S.rows.length) {
@@ -498,12 +578,12 @@ function paintTable() {
   const thead = h('thead', null, h('tr', null,
     h('th', { class: 'cb' }, all),
     sortHeader('Página', 'name'),
+    sortHeader('Placar', 'score'),
     sortHeader('Anúncios ativos', 'ads_active'),
     sortHeader('Dias rodando', 'days'),
     h('th', null, 'Site'),
-    h('th', null, 'Países'),
+    sortHeader('Visto', 'first_seen'),
     h('th', null, 'Status'),
-    sortHeader('Visto em', 'first_seen'),
     h('th', { class: 'act' })
   ));
   const tbody = h('tbody');
@@ -523,13 +603,16 @@ function paintTable() {
           h('div', { class: 'pname' }, r.name || '(sem nome)'),
           h('div', { class: 'pmeta' },
             r.qualifies ? h('span', { class: 'chip pass' }, 'passa no critério') : null,
+            r.scaling ? h('span', { class: 'chip scale' }, ic('trend'), scaleText(r)) : null,
+            r.offer_label ? h('span', { class: 'chip offer' }, r.offer_label) : null,
+            r.tags.map((t) => h('span', { class: 'chip tag' }, t)),
             r.terms.length ? h('span', { class: 'chip' }, r.terms[0] + (r.terms.length > 1 ? ' +' + (r.terms.length - 1) : '')) : null)))),
+      h('td', null, scoreBadge(r.score)),
       h('td', null, barCell(r.ads_active, maxAds, S.criteria.min_ads, r.ads_active >= S.criteria.min_ads)),
       h('td', null, barCell(r.days, maxDays, S.criteria.min_days, r.days !== null && r.days >= S.criteria.min_days)),
       h('td', null, site),
-      h('td', null, h('div', { class: 'countries' }, r.countries.map((c) => h('span', { class: 'cchip' }, c)))),
+      h('td', null, h('div', { class: 'dim' }, ago(r.first_seen)), h('div', { class: 'countries' }, r.countries.map((c) => h('span', { class: 'cchip' }, c)))),
       h('td', null, pill),
-      h('td', { class: 'dim' }, ago(r.first_seen)),
       h('td', { class: 'act' }, kebab)
     );
     tr.addEventListener('keydown', (e) => { if (e.key === 'Enter') openDrawer(r.page_id); });
@@ -546,26 +629,30 @@ function closeMenu() { if (menuEl) { menuEl.remove(); menuEl = null; } }
 document.addEventListener('click', closeMenu);
 window.addEventListener('scroll', closeMenu, true);
 
-function openRowMenu(btn, r) {
+function openMenuAt(btn, items) {
   closeMenu();
   const rect = btn.getBoundingClientRect();
-  const item = (icon, label, fn) => h('button', { type: 'button', onclick: () => { closeMenu(); fn(); } }, ic(icon), label);
-  const link = (icon, label, href) => h('a', { href, target: '_blank', rel: 'noopener noreferrer' }, ic(icon), label);
-  const items = [
-    item('eye', 'Abrir detalhes', () => openDrawer(r.page_id)),
-    link('external', 'Abrir na Biblioteca', r.library_url),
-  ];
-  if (r.domain) items.push(link('external', 'Abrir o site', r.site_url || ('https://' + r.domain)));
-  items.push(h('hr'));
-  for (const st of ['new', 'seen', 'fav', 'discarded']) {
-    if (st !== r.status) items.push(item(st === 'fav' ? 'star' : st === 'discarded' ? 'trash' : 'dot', 'Marcar como ' + STATUS_LABEL[st].toLowerCase(), () => setStatus(r, st)));
-  }
   menuEl = h('div', { class: 'menu', role: 'menu', onclick: (e) => e.stopPropagation() }, items);
   document.body.append(menuEl);
   const w = menuEl.offsetWidth || 220;
   menuEl.style.left = Math.max(8, Math.min(rect.right - w, window.innerWidth - w - 8)) + 'px';
   const hgt = menuEl.offsetHeight;
   menuEl.style.top = (rect.bottom + hgt + 8 > window.innerHeight ? Math.max(8, rect.top - hgt - 4) : rect.bottom + 4) + 'px';
+}
+const menuItem = (icon, label, fn) => h('button', { type: 'button', onclick: () => { closeMenu(); fn(); } }, ic(icon), label);
+const menuLink = (icon, label, href, download) => h('a', { href, target: download ? null : '_blank', rel: 'noopener noreferrer', download: download ? '' : null, onclick: closeMenu }, ic(icon), label);
+
+function openRowMenu(btn, r) {
+  const items = [
+    menuItem('eye', 'Abrir detalhes', () => openDrawer(r.page_id)),
+    menuLink('external', 'Abrir na Biblioteca', r.library_url),
+  ];
+  if (r.domain) items.push(menuLink('external', 'Abrir o site', r.site_url || ('https://' + r.domain)));
+  items.push(h('hr'));
+  for (const st of ['new', 'seen', 'fav', 'discarded']) {
+    if (st !== r.status) items.push(menuItem(st === 'fav' ? 'star' : st === 'discarded' ? 'trash' : 'dot', 'Marcar como ' + STATUS_LABEL[st].toLowerCase(), () => setStatus(r, st)));
+  }
+  openMenuAt(btn, items);
 }
 
 async function setStatus(r, status) {
@@ -583,11 +670,39 @@ function paintBulk() {
   const n = S.selected.size;
   if (n) {
     const mk = (icon, label, status, cls) => h('button', { class: 'btn ' + (cls || ''), onclick: () => bulkStatus(status) }, ic(icon), label);
-    bulkBox.append(h('strong', null, n + (n === 1 ? ' selecionada' : ' selecionadas')), mk('eye', 'Marcar vistas', 'seen', 'tint'), mk('star', 'Favoritar', 'fav'), mk('trash', 'Descartar', 'discarded'));
+    const tagBtn = h('button', { class: 'btn', onclick: (e) => { e.stopPropagation(); openTagMenu(tagBtn); } }, ic('tag'), 'Etiquetar');
+    bulkBox.append(h('strong', null, n + (n === 1 ? ' selecionada' : ' selecionadas')), mk('eye', 'Marcar vistas', 'seen', 'tint'), mk('star', 'Favoritar', 'fav'), tagBtn, mk('trash', 'Descartar', 'discarded'));
   } else {
     bulkBox.append(h('span', { class: 'dim' }, S.total + (S.total === 1 ? ' página na lista' : ' páginas na lista')));
   }
-  bulkBox.append(h('a', { class: 'btn primary spacer', href: '/api/export.csv?' + queryString().toString(), download: '' }, ic('download'), 'Exportar CSV'));
+  const repBtn = h('button', { class: 'btn spacer', onclick: (e) => {
+    e.stopPropagation();
+    openMenuAt(repBtn, [
+      menuLink('download', 'PDF: últimas 24 horas', '/api/report.pdf?days=1', true),
+      menuLink('download', 'PDF: últimos 7 dias', '/api/report.pdf?days=7', true),
+      menuLink('download', 'PDF: últimos 30 dias', '/api/report.pdf?days=30', true),
+    ]);
+  } }, ic('doc'), 'Relatório PDF');
+  bulkBox.append(repBtn, h('a', { class: 'btn primary', href: '/api/export.csv?' + queryString().toString(), download: '' }, ic('download'), 'Exportar CSV'));
+}
+
+function openTagMenu(btn) {
+  const apply = async (tag) => {
+    try {
+      await api('/api/pages/bulk', { method: 'POST', body: { ids: [...S.selected], addTag: tag } });
+      toast('Etiqueta "' + tag + '" aplicada.');
+      await loadFacets();
+      if (S.fillFacets) S.fillFacets();
+      await loadPages();
+    } catch (ex) { toast(ex.message, true); }
+  };
+  const items = S.facets.tags.map((t) => menuItem('tag', t.tag, () => apply(t.tag)));
+  if (items.length) items.push(h('hr'));
+  items.push(menuItem('sparkle', 'Nova etiqueta...', () => {
+    const name = window.prompt('Nome da etiqueta (ex: testar, copiar, vsl forte):');
+    if (name && name.trim()) apply(name.trim());
+  }));
+  openMenuAt(btn, items);
 }
 
 async function bulkStatus(status) {
@@ -665,6 +780,10 @@ async function openDrawer(id) {
     paintSeg();
 
     const kv = h('dl', { class: 'kv' },
+      h('dt', null, 'Placar'), h('dd', null, scoreBadge(p.score)),
+      h('dt', null, 'Oferta'), h('dd', null, p.offer_label || 'não identificada'),
+      h('dt', null, 'Escala'), h('dd', null, p.scaling ? scaleText(p) : (p.delta !== null ? (p.delta > 0 ? '+' + p.delta : String(p.delta)) + ' anúncios desde a última leitura' : 'ainda sem histórico')),
+      h('dt', null, 'Novos em 7 dias'), h('dd', { class: 'num' }, String(p.new7)),
       h('dt', null, 'Anúncios ativos'), h('dd', { class: 'num' }, String(p.ads_active) + (p.ads_groups ? ' (' + p.ads_groups + ' criativos distintos)' : '')),
       h('dt', null, 'Mais antigo'), h('dd', { class: 'num' }, p.days === null || p.days === undefined ? 'sem data' : p.days + ' dias'),
       h('dt', null, 'Site'), h('dd', null, p.domain ? h('a', { href: p.site_url || ('https://' + p.domain), target: '_blank', rel: 'noopener noreferrer' }, p.site_url || p.domain) : '-'),
@@ -673,7 +792,41 @@ async function openDrawer(id) {
       h('dt', null, 'Primeira vez'), h('dd', { class: 'num' }, fmtDate(p.first_seen)),
       h('dt', null, 'Dados'), h('dd', null, p.deep ? 'varredura completa da página' : 'só da busca (ainda sem varredura da página)')
     );
-    const ads = h('div', { class: 'adlist' }, d.ads.length ? d.ads.map(adRow) : h('div', { class: 'empty' }, 'Nenhum anúncio guardado ainda.'));
+    const adsBox = h('div', { class: 'adlist' });
+    const adFilter = h('div', { class: 'statusseg small' });
+    let adMode = 'all';
+    const paintAds = () => {
+      const list = d.ads.filter((a) => adMode === 'all' || (adMode === 'active' && a.is_active) || (adMode === 'new' && a.is_active && a.days !== null && a.days <= 7));
+      adsBox.replaceChildren(...(list.length ? list.map(adRow) : [h('div', { class: 'empty' }, 'Nenhum anúncio neste filtro.')]));
+      adFilter.replaceChildren(...[['all', 'Todos'], ['active', 'Ativos'], ['new', 'Novos (7 dias)']].map(([v, l]) =>
+        h('button', { 'aria-pressed': String(adMode === v), onclick: () => { adMode = v; paintAds(); } }, l)));
+    };
+    paintAds();
+    const tagBox = h('div', { class: 'tagbox' });
+    let tags = [...p.tags];
+    const saveTags = async () => {
+      try {
+        await api('/api/pages/' + encodeURIComponent(id), { method: 'PATCH', body: { tags } });
+        const row = S.rows.find((x) => x.page_id === id);
+        if (row) row.tags = [...tags];
+        if (S.tab === 'paginas') paintTable();
+        await loadFacets();
+        if (S.fillFacets) S.fillFacets();
+      } catch (ex) { toast(ex.message, true); }
+    };
+    const tagInput = h('input', { type: 'text', placeholder: 'Nova etiqueta', maxlength: '30', list: 'taglist' });
+    const tagList = h('datalist', { id: 'taglist' }, S.facets.tags.map((t) => h('option', { value: t.tag })));
+    const paintTags = () => {
+      tagBox.replaceChildren(...tags.map((t) => h('span', { class: 'chip tag removable' }, t,
+        h('button', { type: 'button', 'aria-label': 'Remover ' + t, onclick: () => { tags = tags.filter((x) => x !== t); paintTags(); saveTags(); } }, ic('x')))), tagInput, tagList);
+    };
+    tagInput.addEventListener('keydown', (e) => {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      const v = tagInput.value.trim();
+      if (v && !tags.some((x) => x.toLowerCase() === v.toLowerCase()) && tags.length < 12) { tags.push(v); tagInput.value = ''; paintTags(); saveTags(); tagInput.focus(); }
+    });
+    paintTags();
     drawerEl.replaceChildren(
       h('div', { class: 'dhead' }, h('h3', null, p.name || '(sem nome)'), h('button', { class: 'iconbtn', onclick: closeDrawer, 'aria-label': 'Fechar' }, ic('x'))),
       h('div', { class: 'dbody' },
@@ -683,8 +836,9 @@ async function openDrawer(id) {
         ),
         seg, h('div', { style: null, class: 'hint' }, ' '),
         kv,
+        h('h2', { class: 'sec' }, 'Etiquetas'), tagBox,
         h('h2', { class: 'sec' }, 'Anotações'), notes, h('div', { class: 'actions' }, saveNotes),
-        h('h2', { class: 'sec' }, 'Anúncios (' + d.ads.length + ')'), ads
+        h('div', { class: 'sechead' }, h('h2', { class: 'sec' }, 'Criativos (' + d.ads.length + ')'), adFilter), adsBox
       )
     );
     drawerEl.classList.add('open');
@@ -694,30 +848,44 @@ async function openDrawer(id) {
 }
 
 function adRow(a) {
-  const thumb = a.thumb_url
-    ? h('img', { class: 'thumb', src: a.thumb_url, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })
-    : h('div', { class: 'thumb ph' }, a.format || 'ad');
+  let thumb;
+  const ph = () => h('div', { class: 'thumb ph' }, a.format || 'ad');
+  if (a.has_thumb || a.thumb_url) {
+    thumb = h('img', { class: 'thumb', src: a.has_thumb ? '/api/thumb/' + encodeURIComponent(a.ad_id) : a.thumb_url, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' });
+    thumb.addEventListener('error', () => {
+      if (a.has_thumb && a.thumb_url && thumb.dataset.fallback !== '1') { thumb.dataset.fallback = '1'; thumb.src = a.thumb_url; }
+      else thumb.replaceWith(ph());
+    });
+  } else thumb = ph();
+  const copy = a.body ? h('button', { type: 'button', class: 'linkbtn', onclick: async () => {
+    try { await navigator.clipboard.writeText((a.title ? a.title + '\n\n' : '') + a.body); toast('Texto copiado.'); } catch { toast('Não consegui copiar.', true); }
+  } }, ic('copy'), 'Copiar texto') : null;
   return h('div', { class: 'ad' }, thumb,
     h('div', null,
       a.title ? h('div', { class: 't' }, a.title) : null,
       h('div', { class: 'b' }, a.body || ''),
       h('div', { class: 'm num' },
+        a.is_active ? null : h('span', { class: 'chip' }, 'inativo'),
         h('span', null, a.days === null || a.days === undefined ? 'sem data' : a.days + ' dias'),
+        a.offer_type ? h('span', { class: 'chip offer' }, OFFER_LABELS[a.offer_type] || a.offer_type) : null,
         a.cta ? h('span', null, a.cta) : null,
         a.format ? h('span', null, a.format) : null,
         a.collation_count > 1 ? h('span', null, a.collation_count + ' versões') : null,
         h('a', { href: a.library_url, target: '_blank', rel: 'noopener noreferrer' }, 'Biblioteca'),
-        a.link_url ? h('a', { href: a.link_url, target: '_blank', rel: 'noopener noreferrer' }, 'Destino') : null
+        a.link_url ? h('a', { href: a.link_url, target: '_blank', rel: 'noopener noreferrer' }, 'Destino') : null,
+        copy
       )
     )
   );
 }
+const OFFER_LABELS = { checkout: 'Checkout direto', vsl: 'VSL', quiz: 'Quiz', vendas: 'Página de vendas', loja: 'Loja', whatsapp: 'WhatsApp', app: 'App', interno: 'Facebook/Instagram' };
 
 /* ---------- rodadas ---------- */
 async function loadRuns() {
   try {
-    const [r, dbg] = await Promise.all([api('/api/runs'), isAdmin() ? api('/api/debug') : Promise.resolve({ rows: [] })]);
+    const [r, dbg, rep] = await Promise.all([api('/api/runs'), isAdmin() ? api('/api/debug') : Promise.resolve({ rows: [] }), api('/api/reports').catch(() => ({ rows: [] }))]);
     S.runs = r.rows;
+    S.reports = rep.rows;
     S.debug = dbg.rows;
     paintRuns();
     if (S.runs.length) {
@@ -775,8 +943,14 @@ async function showRun(id) {
       ? 'Início em ' + when.toLocaleDateString('pt-BR') + ' às ' + when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (d.finished_at ? ' · Duração: ' + fmtDur(d.started_at, d.finished_at) : '')
       : '';
     const kpi = (icon, value, label) => h('div', { class: 'kpi' }, h('div', { class: 'tile' }, ic(icon)), h('div', null, h('b', { class: 'num' }, String(value)), h('span', null, label)));
-    const rerun = isAdmin() && !(S.status && S.status.running)
-      ? h('button', { class: 'btn', onclick: onRunClick }, ic('refresh'), 'Rodar novamente') : null;
+    const idle = isAdmin() && !(S.status && S.status.running);
+    let hasPlan = false;
+    try { hasPlan = JSON.parse(d.plan || '[]').length > 0; } catch { hasPlan = false; }
+    const canResume = idle && hasPlan && ['interrompida', 'cancelada', 'erro'].includes(d.status);
+    const resume = canResume ? h('button', { class: 'btn primary', onclick: async () => {
+      try { await api('/api/runs/' + id + '/resume', { method: 'POST', body: {} }); toast('Rodada retomada.'); await refreshStatus(); } catch (ex) { toast(ex.message, true); }
+    } }, ic('play'), 'Retomar de onde parou (' + d.searches_done + '/' + d.searches_total + ')') : null;
+    const rerun = idle ? h('button', { class: 'btn', onclick: onRunClick }, ic('refresh'), 'Rodar novamente') : null;
     const logText = d.log || '(sem registro)';
     const dlLog = h('button', { class: 'btn small', onclick: () => {
       const url = URL.createObjectURL(new Blob([logText], { type: 'text/plain;charset=utf-8' }));
@@ -787,12 +961,23 @@ async function showRun(id) {
     const pre = h('pre', { class: 'log' }, logText);
     const cards = [
       h('div', { class: 'card' },
-        h('div', { class: 'rd-head' }, h('div', null, h('h2', null, 'Rodada #' + String(id).padStart(3, '0'), h('span', { class: 'badge ' + d.status }, RUN_LABEL[d.status] || d.status)), h('p', null, sub)), rerun),
+        h('div', { class: 'rd-head' }, h('div', null, h('h2', null, 'Rodada #' + String(id).padStart(3, '0'), h('span', { class: 'badge ' + d.status }, RUN_LABEL[d.status] || d.status)), h('p', null, sub)), h('div', { class: 'rd-actions' }, resume, rerun)),
         h('div', { class: 'kpis' }, kpi('search', d.searches_done, 'buscas realizadas'), kpi('list', d.deep_done, 'varreduras'), kpi('file', d.pages_found, 'páginas achadas'), kpi('sparkle', d.new_pages, 'novas páginas'))),
       h('div', { class: 'card' },
         h('div', { class: 'logcard-head' }, h('div', null, h('h3', null, 'Registro da rodada'), h('p', null, 'Log completo de execução desta rodada.')), dlLog),
         pre),
     ];
+    cards.push(h('div', { class: 'card' },
+      h('div', { class: 'logcard-head' }, h('div', null, h('h3', null, 'Relatórios diários'), h('p', null, 'PDF com as páginas novas que passam no critério e as que estão escalando. Sai sozinho ao fim de cada rodada concluída.')),
+        isAdmin() ? h('button', { class: 'btn small', onclick: async (e) => {
+          const b = e.currentTarget; b.disabled = true;
+          try { const r = await api('/api/reports/generate', { method: 'POST', body: {} }); toast('Relatório gerado: ' + r.name); await loadRuns(); } catch (ex) { toast(ex.message, true); }
+          b.disabled = false;
+        } }, ic('doc'), 'Gerar agora') : null),
+      S.reports.length
+        ? h('div', { class: 'files' }, S.reports.slice(0, 7).map((f) => h('div', { class: 'file' }, ic('file'), h('span', { class: 'nm' }, f.name), h('span', { class: 'sz num' }, fmtDateTime(f.mtime)),
+            h('a', { class: 'btn small', href: '/api/reports/' + encodeURIComponent(f.name), download: '' }, ic('download'), 'Baixar'))))
+        : h('div', { class: 'pad' }, h('div', { class: 'hint' }, 'Nenhum relatório ainda. O primeiro sai depois da primeira rodada concluída.'))));
     if (isAdmin() && S.debug && S.debug.length) {
       const fmtSize = (b) => (b > 1048576 ? (b / 1048576).toFixed(1).replace('.', ',') + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
       cards.push(h('div', { class: 'card' },
@@ -884,12 +1069,13 @@ function paintKeywords() {
       h('td', { class: 'cb' }, cb),
       h('td', null, h('div', { class: 'pname' }, k.term), h('div', { class: 'pmeta' }, [k.lang.toUpperCase(), k.niche, k.countries ? k.countries.replace(/,/g, ' ') : 'países padrão'].filter(Boolean).join(' / '))),
       h('td', { class: 'num dim' }, String(k.pages) + (k.pages === 1 ? ' página' : ' páginas')),
+      h('td', { class: 'num' }, k.good ? h('span', { class: 'chip pass' }, k.good + (k.good === 1 ? ' boa' : ' boas')) : h('span', { class: 'faint' }, '0')),
       h('td', { class: 'dim' }, k.last_run_at ? ago(k.last_run_at) : 'nunca'),
       h('td', null, on)
     ));
   }
   box.append(bar, h('div', { class: 'tablewrap' }, h('table', { style: null },
-    h('thead', null, h('tr', null, h('th', { class: 'cb' }), h('th', null, 'Palavra-chave'), h('th', null, 'Achou'), h('th', null, 'Última busca'), h('th', null, 'Ativa'))),
+    h('thead', null, h('tr', null, h('th', { class: 'cb' }), h('th', null, 'Palavra-chave'), h('th', null, 'Achou'), h('th', null, 'Boas'), h('th', null, 'Última busca'), h('th', null, 'Ativa'))),
     tbody)));
 }
 
@@ -920,8 +1106,11 @@ async function viewSettings() {
     const countries = h('input', { type: 'text', id: 's-countries', value: s.default_countries });
     const mode = h('select', { id: 's-mode' }, [['off', 'Desligado'], ['daily', 'Todo dia'], ['interval', 'A cada N horas']].map(([v, l]) => h('option', { value: v, selected: s.schedule_mode === v }, l)));
     const time = h('input', { type: 'time', id: 's-time', value: s.schedule_time });
+    const searchMode = h('select', { id: 's-smode' }, [['wide', 'Larga (recomendado)'], ['exact', 'Exata']].map(([v, l]) => h('option', { value: v, selected: s.search_mode === v }, l)));
+    const prio = h('input', { type: 'checkbox', id: 's-prio', checked: s.prioritize === '1' });
+    const autoRep = h('input', { type: 'checkbox', id: 's-arep', checked: s.auto_report === '1' });
     const save = h('button', { class: 'btn primary', onclick: async () => {
-      const body = { default_countries: countries.value, schedule_mode: mode.value, schedule_time: time.value };
+      const body = { default_countries: countries.value, schedule_mode: mode.value, schedule_time: time.value, search_mode: searchMode.value, prioritize: prio.checked, auto_report: autoRep.checked };
       for (const [k, el] of Object.entries(inputs)) body[k] = el.value;
       try { await api('/api/settings', { method: 'PUT', body }); toast('Ajustes salvos.'); refreshCriteria(); } catch (ex) { toast(ex.message, true); }
     } }, 'Salvar ajustes');
@@ -932,6 +1121,13 @@ async function viewSettings() {
         h('div', null, h('label', { class: 'lbl', for: 's-mode' }, 'Rodar sozinho'), mode),
         h('div', null, h('label', { class: 'lbl', for: 's-time' }, 'Horário (modo diário)'), time)
       )),
+      h('fieldset', null, h('h2', { class: 'sec' }, 'Busca e otimização'), h('div', { class: 'fgrid' },
+        h('div', null, h('label', { class: 'lbl', for: 's-smode' }, 'Modo de busca'), searchMode,
+          h('div', { class: 'hint' }, 'Larga: busca só pelos 2 primeiros termos e usa os outros como filtro no texto do anúncio. Traz mais páginas. Exata: busca com todos os termos.')),
+        h('div', null, h('label', { class: 'chk', for: 's-prio' }, prio, 'Priorizar palavras que rendem'),
+          h('div', { class: 'hint' }, 'Quando as buscas não cabem na rodada, vão primeiro as palavras nunca rodadas e as que mais trouxeram páginas boas.')),
+        h('div', null, h('label', { class: 'chk', for: 's-arep' }, autoRep, 'Relatório diário em PDF'),
+          h('div', { class: 'hint' }, 'Gera um PDF ao fim de cada rodada concluída.')))),
       backupBlock(),
       h('div', { class: 'hint' }, d.proxy ? 'Proxy configurado no servidor.' : 'Sem proxy. Se o Facebook bloquear o IP da VPS, configure PROXY_SERVER nas variáveis do serviço.'),
       h('div', null, save)

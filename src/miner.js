@@ -2,6 +2,8 @@ import { openDb, now, getSettings, setSettings, num } from './db.js';
 import { config } from './config.js';
 import { openBrowser, collect, searchUrl, pageUrl, sleep, rnd } from './crawler.js';
 import { savePageFromAds, groupByPage } from './store.js';
+import { splitTerm, matchesAll } from './terms.js';
+import { saveDailyReport } from './report.js';
 
 const state = {
   running: false,
@@ -47,6 +49,37 @@ export function buildSearches(keywords, settings) {
   return out;
 }
 
+// Ordem das buscas quando nao cabem todas na rodada: palavras nunca rodadas primeiro,
+// depois as que mais trouxeram paginas boas, depois as rodadas ha mais tempo.
+export function prioritizeSearches(searches, d, settings) {
+  const minAds = num(settings, 'min_ads');
+  const minDays = num(settings, 'min_days');
+  const rows = d
+    .prepare(
+      `SELECT h.term AS term, COUNT(DISTINCT p.page_id) AS good
+       FROM page_hits h JOIN pages p ON p.page_id = h.page_id
+       WHERE p.status != 'discarded' AND p.ads_active >= ? AND p.oldest_start IS NOT NULL
+         AND (strftime('%s', 'now') - p.oldest_start) / 86400 >= ?
+       GROUP BY h.term`
+    )
+    .all(minAds, minDays);
+  const good = new Map(rows.map((r) => [r.term, r.good]));
+  const keyed = searches.map((s, i) => ({ s, i, never: s.kw.last_run_at ? 0 : 1, good: good.get(s.kw.term) || 0, last: s.kw.last_run_at || 0 }));
+  keyed.sort((a, b) => b.never - a.never || b.good - a.good || a.last - b.last || a.i - b.i);
+  return keyed.map((k) => k.s);
+}
+
+// pausa irregular entre acoes, com alguns intervalos mais longos de vez em quando
+function humanPause(settings) {
+  const lo = num(settings, 'delay_min');
+  const hi = Math.max(lo, num(settings, 'delay_max'));
+  let sec = rnd(lo, hi);
+  const r = Math.random();
+  if (r < 0.12) sec += rnd(8, 25);
+  else if (r < 0.3) sec *= rnd(0.7, 1.4);
+  return Math.max(1, sec);
+}
+
 async function interruptibleSleep(ms) {
   const end = Date.now() + ms;
   while (Date.now() < end && !state.stop) await sleep(Math.min(500, end - Date.now()));
@@ -56,9 +89,36 @@ function stamp() {
   return new Date().toLocaleTimeString('pt-BR', { timeZone: config.timezone, hour12: false });
 }
 
-export function startRun({ trigger = 'manual', keywordIds = null } = {}) {
-  if (state.running) return { ok: false, error: 'Ja existe uma rodada em andamento.' };
+export function startRun({ trigger = 'manual', keywordIds = null, resumeRunId = null } = {}) {
+  if (state.running) return { ok: false, error: 'Já existe uma rodada em andamento.' };
   const d = openDb();
+
+  if (resumeRunId) {
+    const run = d.prepare('SELECT * FROM runs WHERE id = ?').get(Number(resumeRunId));
+    if (!run) return { ok: false, error: 'Rodada não encontrada.' };
+    if (!['interrompida', 'cancelada', 'erro'].includes(run.status)) {
+      return { ok: false, error: 'Só dá para retomar rodadas interrompidas, canceladas ou com erro.' };
+    }
+    let plan = [];
+    try { plan = JSON.parse(run.plan || '[]'); } catch { plan = []; }
+    if (!Array.isArray(plan) || !plan.length) {
+      return { ok: false, error: 'Essa rodada é antiga e não guardou o plano de buscas. Use Rodar novamente.' };
+    }
+    const kwById = new Map(d.prepare('SELECT * FROM keywords').all().map((k) => [k.id, k]));
+    const searches = plan.map(([id, country]) => ({ kw: kwById.get(id), country })).filter((x) => x.kw);
+    d.prepare("UPDATE runs SET status = 'rodando', finished_at = NULL, error = NULL WHERE id = ?").run(run.id);
+    state.running = true;
+    state.runId = run.id;
+    state.stop = false;
+    state.phase = 'preparando';
+    state.message = 'retomando a rodada ' + run.id;
+    state.done = run.searches_done;
+    state.total = searches.length;
+    state.startedAt = run.started_at;
+    runMining(run.id, { searches, resume: run }).catch((err) => console.error('Falha inesperada na rodada', err));
+    return { ok: true, runId: run.id, resumed: true };
+  }
+
   let kws = d.prepare('SELECT * FROM keywords WHERE active = 1 ORDER BY id').all();
   const specific = Array.isArray(keywordIds) && keywordIds.length > 0;
   if (specific) {
@@ -81,18 +141,20 @@ export function startRun({ trigger = 'manual', keywordIds = null } = {}) {
   state.total = 0;
   state.startedAt = now();
 
-  runMining(runId, kws, specific).catch((err) => {
+  runMining(runId, { keywords: kws, specific }).catch((err) => {
     console.error('Falha inesperada na rodada', err);
   });
   return { ok: true, runId };
 }
 
-async function runMining(runId, keywords, specific) {
+async function runMining(runId, { keywords = [], specific = false, searches: resumeSearches = null, resume = null } = {}) {
   const d = openDb();
   const settings = getSettings();
   const startedAt = state.startedAt;
-  const lines = [];
-  const counters = { searches_done: 0, searches_total: 0, deep_done: 0, ads_seen: 0, pages_found: 0, new_pages: 0 };
+  const lines = resume && resume.log ? resume.log.split('\n') : [];
+  const counters = resume
+    ? { searches_done: resume.searches_done, searches_total: resume.searches_total, deep_done: resume.deep_done, ads_seen: resume.ads_seen, pages_found: resume.pages_found, new_pages: resume.new_pages }
+    : { searches_done: 0, searches_total: 0, deep_done: 0, ads_seen: 0, pages_found: 0, new_pages: 0 };
   let finalStatus = 'concluida';
   let finalError = null;
 
@@ -118,27 +180,46 @@ async function runMining(runId, keywords, specific) {
   };
   const shouldStop = () => state.stop;
   const touched = new Set();
+  if (resume) {
+    for (const r of d.prepare('SELECT page_id FROM pages WHERE last_seen >= ?').all(startedAt)) touched.add(r.page_id);
+  }
 
   let context = null;
   try {
-    let searches = buildSearches(keywords, settings);
-    const cap = num(settings, 'max_searches_per_run');
-    if (!specific && searches.length > cap) {
-      const start = num(settings, 'search_cursor') % searches.length;
-      searches = [...searches.slice(start), ...searches.slice(0, start)].slice(0, cap);
-      setSettings({ search_cursor: (start + cap) % buildSearches(keywords, settings).length });
+    let searches;
+    let startIndex = 0;
+    if (resume) {
+      searches = resumeSearches;
+      startIndex = Math.min(resume.searches_done, searches.length);
+      counters.searches_total = searches.length;
+      state.total = searches.length;
+      log(`Rodada ${runId} retomada na busca ${startIndex + 1} de ${searches.length}.`);
+    } else {
+      searches = buildSearches(keywords, settings);
+      const cap = num(settings, 'max_searches_per_run');
+      if (!specific && searches.length > cap) {
+        if (settings.prioritize === '1') {
+          searches = prioritizeSearches(searches, d, settings).slice(0, cap);
+        } else {
+          const start = num(settings, 'search_cursor') % searches.length;
+          searches = [...searches.slice(start), ...searches.slice(0, start)].slice(0, cap);
+          setSettings({ search_cursor: (start + cap) % buildSearches(keywords, settings).length });
+        }
+      }
+      d.prepare('UPDATE runs SET plan = ? WHERE id = ?').run(JSON.stringify(searches.map((x) => [x.kw.id, x.country])), runId);
+      counters.searches_total = searches.length;
+      state.total = searches.length;
+      log(`Rodada ${runId} iniciada: ${searches.length} buscas (${keywords.length} palavras-chave ativas).`);
     }
-    counters.searches_total = searches.length;
-    state.total = searches.length;
-    log(`Rodada ${runId} iniciada: ${searches.length} buscas (${keywords.length} palavras-chave ativas).`);
 
-    context = await openBrowser();
+    context = await openBrowser(log);
     log('Navegador aberto.');
 
     // ---------- etapa 1: buscas por palavra-chave ----------
     state.phase = 'buscas';
     let consecutiveErrors = 0;
-    for (let i = 0; i < searches.length; i += 1) {
+    let nextLong = Math.floor(rnd(6, 13));
+    for (let i = startIndex; i < searches.length; i += 1) {
       if (shouldStop()) {
         finalStatus = 'cancelada';
         break;
@@ -148,7 +229,8 @@ async function runMining(runId, keywords, specific) {
       state.message = `busca ${i + 1} de ${searches.length}: ${kw.term} (${country})`;
       log(`[${i + 1}/${searches.length}] "${kw.term}" em ${country}`);
 
-      const r = await collect(context, searchUrl(kw.term, country), {
+      const split = splitTerm(kw.term, settings.search_mode);
+      const r = await collect(context, searchUrl(split.query, country), {
         scrolls: num(settings, 'scrolls_search'),
         shouldStop,
         log,
@@ -175,7 +257,9 @@ async function runMining(runId, keywords, specific) {
 
       counters.searches_done = i + 1;
       counters.ads_seen += r.ads.length;
-      const groups = groupByPage(r.ads);
+      const usable = split.filters.length ? r.ads.filter((a) => matchesAll(a, split.filters)) : r.ads;
+      if (split.filters.length) log(`  busca larga: ${usable.length} de ${r.ads.length} anúncios contêm "${split.filters.join(' ')}"`);
+      const groups = groupByPage(usable);
       let newHere = 0;
       for (const g of groups) {
         const isNew = savePageFromAds({
@@ -195,15 +279,16 @@ async function runMining(runId, keywords, specific) {
         }
       }
       counters.pages_found = touched.size;
-      d.prepare('UPDATE keywords SET last_run_at = ?, last_ads = ? WHERE id = ?').run(now(), r.ads.length, kw.id);
-      log(`  ${r.ads.length} anuncios, ${groups.length} paginas (${newHere} novas)`);
+      d.prepare('UPDATE keywords SET last_run_at = ?, last_ads = ? WHERE id = ?').run(now(), usable.length, kw.id);
+      log(`  ${usable.length} anúncios, ${groups.length} páginas (${newHere} novas)`);
 
       if (i < searches.length - 1) {
-        const pause = rnd(num(settings, 'delay_min'), Math.max(num(settings, 'delay_min'), num(settings, 'delay_max')));
-        await interruptibleSleep(pause * 1000);
-        if ((i + 1) % 10 === 0) {
+        await interruptibleSleep(humanPause(settings) * 1000);
+        nextLong -= 1;
+        if (nextLong <= 0) {
+          nextLong = Math.floor(rnd(6, 13));
           log('  pausa longa para parecer mais humano');
-          await interruptibleSleep(rnd(30, 60) * 1000);
+          await interruptibleSleep(rnd(30, 75) * 1000);
         }
       }
     }
@@ -269,9 +354,7 @@ async function runMining(runId, keywords, specific) {
           const days = row && row.oldest_start ? Math.floor((now() - row.oldest_start) / 86400) : '?';
           log(`  ${row ? row.ads_active : '?'} anuncios ativos, mais antigo com ${days} dias, site ${row && row.domain ? row.domain : 'nao identificado'}`);
         }
-        if (i < candidates.length - 1) {
-          await interruptibleSleep(rnd(num(settings, 'delay_min'), Math.max(num(settings, 'delay_min'), num(settings, 'delay_max'))) * 1000);
-        }
+        if (i < candidates.length - 1) await interruptibleSleep(humanPause(settings) * 1000);
       }
     }
     if (state.stop && finalStatus === 'concluida') finalStatus = 'cancelada';
@@ -280,7 +363,7 @@ async function runMining(runId, keywords, specific) {
     finalError = String(err && err.message ? err.message : err).split('\n')[0];
     log(`ERRO: ${finalError}`);
     if (/Executable doesn't exist|browserType\.launch/i.test(String(err && err.message))) {
-      log('O navegador nao esta instalado na imagem. Use o Dockerfile do projeto.');
+      log('O navegador não está instalado. No EasyPanel, confira se o método de construção é Dockerfile.');
     }
   } finally {
     if (context) await context.close().catch(() => {});
@@ -292,6 +375,9 @@ async function runMining(runId, keywords, specific) {
       runId
     );
     flush();
+    if (finalStatus === 'concluida' && getSettings().auto_report === '1') {
+      await saveDailyReport().catch((e) => console.error('Falha no relatório diário', e));
+    }
     state.running = false;
     state.stop = false;
     state.phase = '';

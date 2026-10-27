@@ -23,6 +23,10 @@ import { startScheduler } from './scheduler.js';
 import { adLink, pageLibraryLink } from './crawler.js';
 import { toCsv } from './csv.js';
 import { defaultKeywordRows } from './default-keywords.js';
+import { OFFER_LABEL, classifyAd, isScaling, SCALE_DELTA, SCALE_NEW7 } from './classify.js';
+import { readThumb, hasThumb } from './thumbs.js';
+import { recomputeAllDerived } from './store.js';
+import { renderPdf, saveDailyReport, listReports, isReportName, REPORT_DIR } from './report.js';
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +46,7 @@ const STATUSES = ['new', 'seen', 'fav', 'discarded'];
 
 assertConfig();
 const db = openDb();
+try { recomputeAllDerived(); } catch (err) { console.error('Falha ao recalcular placares', err); }
 
 const app = Fastify({ trustProxy: true, logger: { level: 'warn' }, bodyLimit: 2 * 1024 * 1024 });
 
@@ -78,6 +83,7 @@ function resolveUser(req) {
 // rotas so do admin: tudo que roda, apaga ou configura
 function adminOnly(method, url) {
   if (url === '/api/users' || url.startsWith('/api/users/')) return true;
+  if (url === '/api/reports/generate') return true;
   if (url === '/api/settings' || url.startsWith('/api/debug') || url.startsWith('/api/backup')) return true;
   if (method !== 'GET' && (url.startsWith('/api/keywords') || url.startsWith('/api/runs'))) return true;
   return false;
@@ -225,12 +231,29 @@ const SORTS = {
   last_seen: 'last_seen',
   domain: 'domain COLLATE NOCASE',
   hits: 'hits',
+  score: 'score',
+  new7: 'new7',
+  delta: 'delta',
 };
+
+function cleanTags(list) {
+  const out = [];
+  for (const raw of list) {
+    const t = String(raw || '').replace(/[|,;]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 30);
+    if (t && !out.some((o) => o.toLowerCase() === t.toLowerCase())) out.push(t);
+    if (out.length >= 12) break;
+  }
+  return out;
+}
 
 const PAGES_BASE = `
     SELECT p.page_id AS page_id_x, p.page_id, p.name, p.profile_url, p.first_seen, p.last_seen,
       p.ads_active, p.ads_groups, p.oldest_start, p.domain, p.site_url, p.sample_text,
-      p.sample_ad_id, p.last_deep_at, p.status, p.notes,
+      p.sample_ad_id, p.last_deep_at, p.status, p.notes, p.offer_type, p.score,
+      (SELECT COUNT(*) FROM ads a WHERE a.page_id = p.page_id AND a.is_active = 1 AND a.start_date >= strftime('%s', 'now') - 604800) AS new7,
+      p.ads_active - (SELECT s.ads_active FROM page_snapshots s WHERE s.page_id = p.page_id AND s.at <= strftime('%s', 'now') - 72000
+                      ORDER BY ABS(s.at - (strftime('%s', 'now') - 604800)) ASC LIMIT 1) AS delta,
+      (SELECT group_concat(tag, '|') FROM page_tags WHERE page_id = p.page_id) AS tags,
       CASE WHEN p.oldest_start IS NULL THEN NULL
            ELSE CAST((strftime('%s', 'now') - p.oldest_start) / 86400 AS INTEGER) END AS days,
       (SELECT COUNT(*) FROM page_hits h WHERE h.page_id = p.page_id) AS hits,
@@ -271,11 +294,27 @@ function buildPagesQuery(query, { forExport = false } = {}) {
     where.push('EXISTS (SELECT 1 FROM page_hits h WHERE h.page_id = page_id_x AND h.country = ?)');
     params.push(String(query.country).toUpperCase());
   }
+  if (query.offer) {
+    where.push('offer_type = ?');
+    params.push(String(query.offer));
+  }
+  if (query.tag) {
+    where.push('EXISTS (SELECT 1 FROM page_tags t WHERE t.page_id = page_id_x AND t.tag = ?)');
+    params.push(String(query.tag));
+  }
+  if (query.niche) {
+    where.push('EXISTS (SELECT 1 FROM page_hits h JOIN keywords k ON k.term = h.term WHERE h.page_id = page_id_x AND k.niche = ?)');
+    params.push(String(query.niche));
+  }
+  if (query.scaling === '1') {
+    where.push('((delta IS NOT NULL AND delta >= ?) OR new7 >= ?)');
+    params.push(SCALE_DELTA, SCALE_NEW7);
+  }
   if (query.term) {
     where.push('EXISTS (SELECT 1 FROM page_hits h WHERE h.page_id = page_id_x AND h.term = ?)');
     params.push(String(query.term));
   }
-  const sortKey = SORTS[query.sort] ? query.sort : 'ads_active';
+  const sortKey = SORTS[query.sort] ? query.sort : 'score';
   const dir = String(query.dir).toLowerCase() === 'asc' ? 'ASC' : 'DESC';
   const limit = forExport ? 5000 : Math.min(Math.max(Number(query.limit) || 100, 1), 500);
   const offset = Math.max(Number(query.offset) || 0, 0);
@@ -308,6 +347,13 @@ function decoratePage(row, settings) {
     status: row.status,
     notes: row.notes,
     deep: !!row.last_deep_at,
+    offer_type: row.offer_type || '',
+    offer_label: OFFER_LABEL[row.offer_type] || '',
+    score: row.score || 0,
+    new7: row.new7 || 0,
+    delta: row.delta === null || row.delta === undefined ? null : row.delta,
+    scaling: isScaling(row.delta, row.new7),
+    tags: row.tags ? row.tags.split('|') : [],
     hits: row.hits,
     terms: row.terms ? row.terms.split('|') : [],
     countries: row.countries ? row.countries.split(',').filter(Boolean) : [],
@@ -345,6 +391,8 @@ app.get('/api/pages/:id', async (req, reply) => {
       ...a,
       days: a.start_date ? Math.floor((now() - a.start_date) / 86400) : null,
       library_url: adLink(a.ad_id),
+      offer_type: classifyAd(a),
+      has_thumb: hasThumb(a.ad_id),
     }));
   const hits = db
     .prepare('SELECT term, country FROM page_hits WHERE page_id = ? ORDER BY term, country')
@@ -365,27 +413,96 @@ app.patch('/api/pages/:id', async (req, reply) => {
     sets.push('notes = ?');
     params.push(String(body.notes).slice(0, 4000));
   }
-  if (!sets.length) return reply.code(400).send({ error: 'Nada para atualizar.' });
-  const info = db.prepare(`UPDATE pages SET ${sets.join(', ')} WHERE page_id = ?`).run(...params, String(req.params.id));
-  if (!info.changes) return reply.code(404).send({ error: 'Página não encontrada.' });
+  if (body.tags !== undefined && !Array.isArray(body.tags)) return reply.code(400).send({ error: 'Etiquetas inválidas.' });
+  if (!sets.length && body.tags === undefined) return reply.code(400).send({ error: 'Nada para atualizar.' });
+  const id = String(req.params.id);
+  if (!db.prepare('SELECT 1 FROM pages WHERE page_id = ?').get(id)) return reply.code(404).send({ error: 'Página não encontrada.' });
+  if (sets.length) db.prepare(`UPDATE pages SET ${sets.join(', ')} WHERE page_id = ?`).run(...params, id);
+  if (body.tags !== undefined) {
+    const tags = cleanTags(body.tags);
+    db.exec('BEGIN');
+    try {
+      db.prepare('DELETE FROM page_tags WHERE page_id = ?').run(id);
+      for (const t of tags) db.prepare('INSERT OR IGNORE INTO page_tags(page_id, tag) VALUES (?, ?)').run(id, t);
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
   return { ok: true };
 });
 
 app.post('/api/pages/bulk', async (req, reply) => {
-  const { ids, status } = req.body || {};
-  if (!Array.isArray(ids) || !ids.length || !STATUSES.includes(status)) {
+  const { ids, status, addTag, removeTag } = req.body || {};
+  const tag = cleanTags([addTag])[0];
+  const untag = cleanTags([removeTag])[0];
+  if (!Array.isArray(ids) || !ids.length || (!STATUSES.includes(status) && !tag && !untag)) {
     return reply.code(400).send({ error: 'Pedido inválido.' });
   }
   const stmt = db.prepare('UPDATE pages SET status = ? WHERE page_id = ?');
   db.exec('BEGIN');
   try {
-    for (const id of ids.slice(0, 1000)) stmt.run(status, String(id));
+    for (const id of ids.slice(0, 1000)) {
+      if (STATUSES.includes(status)) stmt.run(status, String(id));
+      if (tag) db.prepare('INSERT OR IGNORE INTO page_tags(page_id, tag) VALUES (?, ?)').run(String(id), tag);
+      if (untag) db.prepare('DELETE FROM page_tags WHERE page_id = ? AND tag = ?').run(String(id), untag);
+    }
     db.exec('COMMIT');
   } catch (err) {
     db.exec('ROLLBACK');
     throw err;
   }
   return { ok: true };
+});
+
+app.get('/api/facets', async () => ({
+  niches: db.prepare("SELECT DISTINCT niche FROM keywords WHERE niche != '' ORDER BY niche COLLATE NOCASE").all().map((r) => r.niche),
+  tags: db.prepare('SELECT tag, COUNT(*) AS n FROM page_tags GROUP BY tag ORDER BY tag COLLATE NOCASE').all(),
+  offers: db
+    .prepare("SELECT offer_type AS type, COUNT(*) AS n FROM pages WHERE offer_type != '' AND status != 'discarded' GROUP BY offer_type ORDER BY n DESC")
+    .all()
+    .map((r) => ({ ...r, label: OFFER_LABEL[r.type] || r.type })),
+}));
+
+app.get('/api/thumb/:id', async (req, reply) => {
+  const t = readThumb(String(req.params.id));
+  if (!t) return reply.code(404).send({ error: 'Sem miniatura.' });
+  reply.header('Content-Type', t.type).header('Cache-Control', 'private, max-age=86400').header('X-Content-Type-Options', 'nosniff');
+  return t.data;
+});
+
+app.get('/api/report.pdf', async (req, reply) => {
+  const days = [1, 7, 30].includes(Number(req.query.days)) ? Number(req.query.days) : 1;
+  try {
+    const buf = await renderPdf(days);
+    reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="adhunter-relatorio-${new Date().toISOString().slice(0, 10)}.pdf"`)
+      .header('Cache-Control', 'no-store');
+    return buf;
+  } catch (err) {
+    return reply.code(500).send({ error: 'Não consegui gerar o PDF: ' + String(err.message || err).split('\n')[0] });
+  }
+});
+
+app.get('/api/reports', async () => ({ rows: listReports() }));
+
+app.get('/api/reports/:name', async (req, reply) => {
+  const name = String(req.params.name);
+  if (!isReportName(name)) return reply.code(400).send({ error: 'Arquivo inválido.' });
+  const full = path.join(REPORT_DIR, name);
+  if (!fs.existsSync(full)) return reply.code(404).send({ error: 'Relatório não encontrado.' });
+  reply.header('Content-Type', 'application/pdf').header('Content-Disposition', `attachment; filename="${name}"`);
+  return fs.readFileSync(full);
+});
+
+app.post('/api/reports/generate', async (req, reply) => {
+  try {
+    return { ok: true, name: await saveDailyReport() };
+  } catch (err) {
+    return reply.code(500).send({ error: 'Não consegui gerar o relatório: ' + String(err.message || err).split('\n')[0] });
+  }
 });
 
 app.get('/api/export.csv', async (req, reply) => {
@@ -396,6 +513,11 @@ app.get('/api/export.csv', async (req, reply) => {
   const csv = toCsv(
     [
       'Página',
+      'Placar',
+      'Oferta',
+      'Escalando',
+      'Novos anúncios em 7 dias',
+      'Etiquetas',
       'Link da página na Biblioteca',
       'Anúncios ativos',
       'Criativos distintos',
@@ -411,6 +533,11 @@ app.get('/api/export.csv', async (req, reply) => {
     ],
     rows.map((r) => [
       r.name,
+      r.score,
+      r.offer_label,
+      r.scaling ? 'sim' + (r.delta > 0 ? ' (+' + r.delta + ')' : '') : 'não',
+      r.new7,
+      r.tags.join(' | '),
       r.library_url,
       r.ads_active,
       r.ads_groups,
@@ -435,10 +562,13 @@ app.get('/api/export.csv', async (req, reply) => {
 app.get('/api/keywords', async () => {
   const rows = db
     .prepare(
-      `SELECT k.*, (SELECT COUNT(*) FROM page_hits h WHERE h.term = k.term) AS pages
+      `SELECT k.*, (SELECT COUNT(*) FROM page_hits h WHERE h.term = k.term) AS pages,
+         (SELECT COUNT(DISTINCT p.page_id) FROM page_hits h JOIN pages p ON p.page_id = h.page_id
+            WHERE h.term = k.term AND p.status != 'discarded' AND p.ads_active >= ? AND p.oldest_start IS NOT NULL
+              AND (strftime('%s', 'now') - p.oldest_start) / 86400 >= ?) AS good
        FROM keywords k ORDER BY k.niche COLLATE NOCASE, k.term COLLATE NOCASE`
     )
-    .all();
+    .all(num(getSettings(), 'min_ads'), num(getSettings(), 'min_days'));
   return { rows, default_countries: getSettings().default_countries };
 });
 
@@ -545,7 +675,12 @@ app.get('/api/status', async () => {
   const last = db
     .prepare('SELECT id, started_at, finished_at, status FROM runs ORDER BY id DESC LIMIT 1')
     .get();
-  return { ...st, pages: counts.pages || 0, fresh: counts.fresh || 0, last_run: last || null };
+  let alert = null;
+  const lastFull = db.prepare('SELECT id, finished_at, status, error FROM runs ORDER BY id DESC LIMIT 1').get();
+  if (lastFull && (lastFull.status === 'bloqueada' || lastFull.status === 'erro')) {
+    alert = { kind: lastFull.status, run_id: lastFull.id, at: lastFull.finished_at, error: lastFull.error || '', proxy: !!config.proxyServer };
+  }
+  return { ...st, pages: counts.pages || 0, fresh: counts.fresh || 0, last_run: last || null, alert };
 });
 
 app.get('/api/runs', async () => ({
@@ -571,6 +706,12 @@ app.post('/api/runs', async (req, reply) => {
   return res;
 });
 
+app.post('/api/runs/:id/resume', async (req, reply) => {
+  const res = startRun({ trigger: 'manual', resumeRunId: Number(req.params.id) });
+  if (!res.ok) return reply.code(409).send({ error: res.error });
+  return res;
+});
+
 app.post('/api/runs/stop', async () => ({ ok: stopRun() }));
 
 // ---------- ajustes ----------
@@ -591,7 +732,7 @@ app.get('/api/settings', async () => {
   const s = getSettings();
   const out = {};
   for (const k of Object.keys(DEFAULT_SETTINGS)) {
-    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info'].includes(k)) continue;
+    if (['search_cursor', 'last_scheduled_date', 'last_backup_date', 'last_backup_info', 'last_report_date'].includes(k)) continue;
     out[k] = s[k];
   }
   return { settings: out, timezone: config.timezone, proxy: !!config.proxyServer };
@@ -612,6 +753,13 @@ app.put('/api/settings', async (req, reply) => {
     const cs = parseCountries(body.default_countries);
     if (!cs.length) return reply.code(400).send({ error: 'Informe ao menos um país (ex: MX, CO).' });
     patch.default_countries = cs.join(',');
+  }
+  if (body.search_mode !== undefined) {
+    if (!['wide', 'exact'].includes(body.search_mode)) return reply.code(400).send({ error: 'Modo de busca inválido.' });
+    patch.search_mode = body.search_mode;
+  }
+  for (const k of ['prioritize', 'auto_report']) {
+    if (body[k] !== undefined) patch[k] = body[k] === true || body[k] === '1' || body[k] === 1 ? '1' : '0';
   }
   if (body.schedule_mode !== undefined) {
     if (!['off', 'daily', 'interval'].includes(body.schedule_mode)) {

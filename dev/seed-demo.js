@@ -1,5 +1,9 @@
 // Popula o banco com dados FICTICIOS so para testar o painel. Nao use em producao.
+import fs from 'node:fs';
+import path from 'node:path';
 import { openDb, now } from '../src/db.js';
+import { config } from '../src/config.js';
+import { refreshDerived } from '../src/store.js';
 
 const db = openDb();
 const t = now();
@@ -70,7 +74,7 @@ for (const [id, name, ads, days, domain, status, countries, kwIdx] of pages) {
       t - Math.max(1, days - i * 2) * day,
       i % 2 ? 'Gana dinero desde casa con este metodo simple. Sin experiencia, sin inversion inicial.' : 'Baja de peso con este truco de cocina. Resultados desde la primera semana.',
       i % 2 ? 'Metodo simple' : 'Truco de cocina',
-      `https://${domain}/v${i}`,
+      [`https://${domain}/vsl/${i}`, `https://${domain}/quiz`, `https://pay.hotmart.com/${id}${i}`, `https://${domain}/oferta`][i % 4],
       domain,
       i % 3 === 0 ? 'VIDEO' : 'IMAGE',
       1 + i * 2,
@@ -106,4 +110,16 @@ runs.forEach(([status, trigger, sd, st, dd, seen, found, fresh, error, dur], i) 
   );
 });
 
+const tagStmt = db.prepare('INSERT OR IGNORE INTO page_tags(page_id, tag) VALUES (?, ?)');
+tagStmt.run('9001', 'copiar'); tagStmt.run('9001', 'vsl forte'); tagStmt.run('9002', 'testar'); tagStmt.run('9005', 'testar');
+for (const [id, ads] of [['9001', 48], ['9002', 31], ['9005', 12]]) {
+  db.prepare('INSERT INTO page_snapshots(page_id, at, ads_active, ads_groups) VALUES (?, ?, ?, ?)').run(id, t - 6 * day, ads - 9, 5);
+}
+const thumbDir = path.join(config.dataDir, 'thumbs');
+fs.mkdirSync(thumbDir, { recursive: true });
+const logo = fs.readFileSync(new URL('../public/favicon.png', import.meta.url));
+for (const [id] of pages) for (let i = 0; i < 3; i += 1) {
+  fs.writeFileSync(path.join(thumbDir, `ad-${id}-${i}.img`), logo);
+}
+for (const [id] of pages) refreshDerived(id, false);
 console.log('Dados de exemplo gravados.');

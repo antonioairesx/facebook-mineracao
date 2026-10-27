@@ -21,6 +21,10 @@ export const DEFAULT_SETTINGS = {
   last_scheduled_date: '',
   last_backup_date: '',
   last_backup_info: '',
+  search_mode: 'wide',
+  prioritize: '1',
+  auto_report: '1',
+  last_report_date: '',
 };
 
 const SCHEMA = `
@@ -112,6 +116,21 @@ CREATE TABLE IF NOT EXISTS users (
   last_login_at INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS page_snapshots (
+  page_id TEXT NOT NULL,
+  at INTEGER NOT NULL,
+  ads_active INTEGER NOT NULL DEFAULT 0,
+  ads_groups INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS page_tags (
+  page_id TEXT NOT NULL,
+  tag TEXT NOT NULL COLLATE NOCASE,
+  PRIMARY KEY (page_id, tag)
+);
+
+CREATE INDEX IF NOT EXISTS idx_snap_page ON page_snapshots(page_id, at);
+CREATE INDEX IF NOT EXISTS idx_tags_tag ON page_tags(tag);
 CREATE INDEX IF NOT EXISTS idx_ads_page ON ads(page_id);
 CREATE INDEX IF NOT EXISTS idx_pages_status ON pages(status);
 CREATE INDEX IF NOT EXISTS idx_hits_term ON page_hits(term);
@@ -127,6 +146,9 @@ export function openDb() {
   db.exec('PRAGMA foreign_keys = ON;');
   db.exec('PRAGMA busy_timeout = 5000;');
   db.exec(SCHEMA);
+  addColumn('pages', 'offer_type', "TEXT NOT NULL DEFAULT ''");
+  addColumn('pages', 'score', 'INTEGER NOT NULL DEFAULT 0');
+  addColumn('runs', 'plan', "TEXT NOT NULL DEFAULT ''");
   const insert = db.prepare('INSERT OR IGNORE INTO settings(key, value) VALUES (?, ?)');
   for (const [k, v] of Object.entries(DEFAULT_SETTINGS)) insert.run(k, v);
   // Rodadas que ficaram "rodando" por causa de reinicio do container
@@ -134,6 +156,11 @@ export function openDb() {
     "UPDATE runs SET status = 'interrompida', finished_at = ? WHERE status = 'rodando'"
   ).run(now());
   return db;
+}
+
+function addColumn(table, column, ddl) {
+  const cols = db.prepare(`PRAGMA table_info(${table})`).all();
+  if (!cols.some((c) => c.name === column)) db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
 }
 
 export function now() {

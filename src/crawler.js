@@ -1,8 +1,12 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright';
 import { config } from './config.js';
 import { extractAds, mergeAd, parseTotal, looksBlocked } from './parser.js';
+
+const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 export const rnd = (a, b) => a + Math.random() * (b - a);
@@ -44,7 +48,34 @@ export function pageLibraryLink(pageId) {
   return pageUrl(pageId);
 }
 
-export async function openBrowser() {
+let installing = null;
+
+// Se o navegador nao estiver na maquina (build fora do Dockerfile), instala sozinho uma vez.
+async function installChromium(log) {
+  if (!installing) {
+    if (log) log('Navegador não encontrado. Instalando o Chromium (1 a 3 minutos, só desta vez)...');
+    const cli = path.join(ROOT, 'node_modules', 'playwright', 'cli.js');
+    installing = new Promise((resolve, reject) => {
+      execFile(process.execPath, [cli, 'install', '--with-deps', 'chromium'], { cwd: ROOT, timeout: 15 * 60 * 1000, env: process.env, maxBuffer: 20 * 1024 * 1024 }, (err, stdout, stderr) => {
+        if (err) reject(new Error('Falha ao instalar o Chromium: ' + String(stderr || err.message).split('\n').filter(Boolean).slice(-2).join(' ')));
+        else resolve();
+      });
+    }).finally(() => { installing = null; });
+  }
+  return installing;
+}
+
+export async function launchWithInstall(launch, log) {
+  try {
+    return await launch();
+  } catch (err) {
+    if (!/Executable doesn't exist|browserType\.launch/i.test(String(err && err.message))) throw err;
+    await installChromium(log);
+    return launch();
+  }
+}
+
+export async function openBrowser(log) {
   const profileDir = path.join(config.dataDir, 'profile');
   fs.mkdirSync(profileDir, { recursive: true });
   const opts = {
@@ -62,7 +93,7 @@ export async function openBrowser() {
     if (config.proxyUser) opts.proxy.username = config.proxyUser;
     if (config.proxyPass) opts.proxy.password = config.proxyPass;
   }
-  return chromium.launchPersistentContext(profileDir, opts);
+  return launchWithInstall(() => chromium.launchPersistentContext(profileDir, opts), log);
 }
 
 async function dismissDialogs(page) {
@@ -184,6 +215,11 @@ export async function collect(context, url, { scrolls, shouldStop, log, tag }) {
       let stale = 0;
       let last = found.size;
       for (let i = 0; i < scrolls && !shouldStop(); i += 1) {
+        if (Math.random() < 0.5) {
+          const part = rnd(0.5, 0.9);
+          await page.evaluate((f) => window.scrollBy(0, window.innerHeight * f), part).catch(() => {});
+          await sleep(rnd(500, 1300));
+        }
         await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight)).catch(() => {});
         await sleep(rnd(1800, 3500));
         await page.waitForLoadState('networkidle', { timeout: 6000 }).catch(() => {});
