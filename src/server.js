@@ -183,6 +183,25 @@ app.post('/api/me/password', async (req, reply) => {
 // ---------- usuarios (admin) ----------
 const USERNAME_RE = /^[A-Za-z0-9._-]{3,30}$/;
 
+// Amigos definidos na variavel EXTRA_USERS (usuario:senha, separados por virgula ou quebra de linha).
+// Sao recriados a cada boot, entao sobrevivem mesmo se o banco for apagado.
+for (const item of config.extraUsers.split(/[,\n;]+/)) {
+  const i = item.indexOf(':');
+  if (i < 1) continue;
+  const name = item.slice(0, i).trim();
+  const pass = item.slice(i + 1).trim();
+  if (!USERNAME_RE.test(name) || pass.length < 8 || name.toLowerCase() === config.adminUser.toLowerCase()) {
+    console.error('EXTRA_USERS: ignorando entrada invalida para "' + name + '" (usuario 3 a 30 caracteres, senha minimo 8).');
+    continue;
+  }
+  const ex = db.prepare('SELECT id, pass_hash FROM users WHERE username = ? COLLATE NOCASE').get(name);
+  if (!ex) {
+    db.prepare("INSERT INTO users(username, pass_hash, role, active, created_at) VALUES (?, ?, 'member', 1, ?)").run(name, hashPassword(pass), now());
+  } else if (!verifyPassword(pass, ex.pass_hash)) {
+    db.prepare('UPDATE users SET pass_hash = ? WHERE id = ?').run(hashPassword(pass), ex.id);
+  }
+}
+
 app.get('/api/users', async () => ({
   admin: config.adminUser,
   rows: db

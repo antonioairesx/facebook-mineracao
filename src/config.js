@@ -15,6 +15,7 @@ export const config = {
   headless: env.HEADLESS !== '0',
   backupWebhookUrl: env.BACKUP_WEBHOOK_URL || '',
   backupKey: env.BACKUP_KEY || '',
+  extraUsers: env.EXTRA_USERS || '',
   sessionHours: Number(env.SESSION_HOURS || 24 * 14),
 };
 

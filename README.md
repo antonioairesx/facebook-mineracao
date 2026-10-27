@@ -10,6 +10,7 @@ Voce cadastra palavras-chave, ele busca anuncios ativos por pais, abre a pagina 
 2. No EasyPanel, crie um **App** novo no projeto que preferir.
 3. Em **Source**, escolha GitHub e selecione o repositorio. Em **Build**, escolha **Dockerfile** (o arquivo ja esta na raiz).
 4. Em **Environment**, adicione:
+   - `EXTRA_USERS` (opcional) : amigos fixos, no formato `usuario:senha`, separados por virgula (ex: `joao:senha1234,maria:outra5678`). Sao recriados a cada deploy, entao nunca somem.
    - `ADMIN_PASSWORD` : senha do administrador (minimo 8 caracteres). Sem ela o servidor nao sobe.
    - `ADMIN_USER` : opcional, nome do administrador. Padrao: `admin`.
    - `SESSION_SECRET` : opcional, uma frase longa qualquer.
