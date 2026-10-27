@@ -22,6 +22,7 @@ import { getState, startRun, stopRun, parseCountries } from './miner.js';
 import { startScheduler } from './scheduler.js';
 import { adLink, pageLibraryLink } from './crawler.js';
 import { toCsv } from './csv.js';
+import { defaultKeywordRows } from './default-keywords.js';
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -467,6 +468,23 @@ app.post('/api/keywords', async (req, reply) => {
     throw err;
   }
   return { ok: true, added, skipped: lines.length - added };
+});
+
+app.post('/api/keywords/import-defaults', async () => {
+  const stmt = db.prepare(
+    "INSERT OR IGNORE INTO keywords(term, lang, niche, countries, active, created_at) VALUES (?, ?, ?, '', ?, ?)"
+  );
+  const rows = defaultKeywordRows();
+  let added = 0;
+  db.exec('BEGIN');
+  try {
+    for (const r of rows) added += stmt.run(r.term, r.lang, r.niche, r.active, now()).changes;
+    db.exec('COMMIT');
+  } catch (err) {
+    db.exec('ROLLBACK');
+    throw err;
+  }
+  return { ok: true, added, skipped: rows.length - added };
 });
 
 app.patch('/api/keywords/:id', async (req, reply) => {

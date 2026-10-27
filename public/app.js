@@ -814,7 +814,7 @@ async function loadKeywords() {
 
 function viewKeywords() {
   const text = h('textarea', { id: 'k-text', placeholder: 'Uma por linha. Use + entre termos:\nbajar de peso + truco + gelatina' });
-  const lang = h('select', { id: 'k-lang' }, [['es', 'Espanhol'], ['en', 'Ingles'], ['pt', 'Portugues']].map(([v, l]) => h('option', { value: v }, l)));
+  const lang = h('select', { id: 'k-lang' }, [['es', 'Espanhol'], ['en', 'Inglês'], ['pt', 'Português']].map(([v, l]) => h('option', { value: v }, l)));
   const niche = h('input', { type: 'text', id: 'k-niche', placeholder: 'Emagrecimento', maxlength: '60' });
   const countries = h('input', { type: 'text', id: 'k-countries', placeholder: 'Vazio usa os países padrão' });
   const add = h('button', { class: 'btn primary', onclick: async () => {
@@ -828,6 +828,17 @@ function viewKeywords() {
     } catch (ex) { toast(ex.message, true); }
   } }, 'Adicionar');
   const field = (label, el, id) => h('div', null, h('label', { class: 'lbl', for: id }, label), el);
+  const importBtn = h('button', { class: 'btn tint', onclick: async () => {
+    if (!confirm('Importar a lista pronta (espanhol e inglês, Emagrecimento e Renda extra)? As que já existem são ignoradas.')) return;
+    importBtn.disabled = true;
+    try {
+      const d = await api('/api/keywords/import-defaults', { method: 'POST', body: {} });
+      toast(d.added + ' importadas' + (d.skipped ? ', ' + d.skipped + ' já existiam' : '') + '.');
+      await loadKeywords();
+      paintKeywords();
+    } catch (ex) { toast(ex.message, true); }
+    importBtn.disabled = false;
+  } }, ic('doc'), 'Importar lista pronta');
   viewEl.append(h('div', { class: 'kwgrid' },
     h('div', { class: 'form-stack' },
       h('h2', { class: 'sec' }, 'Adicionar'),
@@ -836,7 +847,9 @@ function viewKeywords() {
       field('Nicho', niche, 'k-niche'),
       field('Países (opcional)', countries, 'k-countries'),
       h('div', { class: 'hint' }, 'O sinal de + vira espaço na busca. Países em siglas separadas por vírgula, ex: MX, CO.'),
-      add
+      add,
+      h('div', { class: 'hint' }, 'Ou carregue de uma vez as combinações em espanhol e inglês dos nichos Emagrecimento e Renda extra.'),
+      importBtn
     ),
     h('div', { id: 'kwlist', class: 'kwlistwrap' })
   ));
