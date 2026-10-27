@@ -4,7 +4,9 @@ import { config } from './config.js';
 
 // Descobre se a pasta de dados fica num volume que sobrevive ao deploy.
 // Sem volume, cada Implantar apaga banco, usuarios e login do navegador.
-export function storageInfo() {
+export function storageInfo(boots = 0) {
+  // prova real: se o contador gravado em /data sobreviveu a um boot, a pasta persiste
+  if (boots > 1) return { persistent: true };
   try {
     const target = path.resolve(config.dataDir);
     const lines = fs.readFileSync('/proc/self/mountinfo', 'utf8').split('\n');

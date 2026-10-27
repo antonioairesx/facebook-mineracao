@@ -113,7 +113,7 @@ app.addHook('onRequest', async (req, reply) => {
   req.user = user;
 });
 
-app.get('/api/health', async () => ({ ok: true, storage: storageInfo(), boots: BOOT.boots, data_since: BOOT.since }));
+app.get('/api/health', async () => ({ ok: true, storage: storageInfo(BOOT.boots), boots: BOOT.boots, data_since: BOOT.since }));
 
 app.get('/api/session', async (req) => {
   const u = resolveUser(req);
@@ -678,7 +678,7 @@ app.get('/api/status', async () => {
   if (lastFull && (lastFull.status === 'bloqueada' || lastFull.status === 'erro')) {
     alert = { kind: lastFull.status, run_id: lastFull.id, at: lastFull.finished_at, error: lastFull.error || '', proxy: !!config.proxyServer };
   }
-  return { ...st, pages: counts.pages || 0, fresh: counts.fresh || 0, last_run: last || null, alert, storage: storageInfo() };
+  return { ...st, pages: counts.pages || 0, fresh: counts.fresh || 0, last_run: last || null, alert, storage: storageInfo(BOOT.boots) };
 });
 
 app.get('/api/runs', async () => ({
