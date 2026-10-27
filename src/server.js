@@ -92,7 +92,8 @@ function adminOnly(method, url) {
   if (url === '/api/users' || url.startsWith('/api/users/')) return true;
   if (url === '/api/reports/generate') return true;
   if (url === '/api/settings' || url.startsWith('/api/debug') || url.startsWith('/api/backup')) return true;
-  if (method !== 'GET' && (url.startsWith('/api/keywords') || url.startsWith('/api/runs'))) return true;
+  // amigos podem iniciar, parar e retomar buscas; cadastrar ou apagar palavras e configurar so o admin
+  if (method !== 'GET' && url.startsWith('/api/keywords')) return true;
   return false;
 }
 

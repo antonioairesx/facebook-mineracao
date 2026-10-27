@@ -254,7 +254,7 @@ function renderLogin() {
 let viewEl = null;
 let runstateEl = null;
 let runBtn = null;
-const TABS_ALL = [['inicio', 'Início', false], ['paginas', 'Páginas', false], ['busca', 'Busca', true], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
+const TABS_ALL = [['inicio', 'Início', false], ['paginas', 'Páginas', false], ['busca', 'Busca', false], ['rodadas', 'Rodadas', false], ['palavras', 'Palavras-chave', true], ['ajustes', 'Ajustes', true], ['conta', 'Conta', false]];
 const tabsFor = () => TABS_ALL.filter(([, , adminOnly]) => !adminOnly || isAdmin());
 
 let themeBtnEl = null;
@@ -267,7 +267,7 @@ function renderShell() {
     )
   );
   runstateEl = h('div', { class: 'runstate' });
-  runBtn = isAdmin() ? h('button', { class: 'btn primary', onclick: onRunClick }) : null;
+  runBtn = h('button', { class: 'btn primary', onclick: onRunClick });
   const top = h('header', { class: 'top' },
     h('div', { class: 'logo' }, svgLogo(), wordmark()),
     tabs,
@@ -299,7 +299,7 @@ function renderTab() {
   closeDrawer();
   viewEl.replaceChildren();
   if (S.tab === 'inicio') viewHome();
-  else if (S.tab === 'busca' && isAdmin()) viewSearch();
+  else if (S.tab === 'busca') viewSearch();
   else if (S.tab === 'paginas') viewPages();
   else if (S.tab === 'rodadas') viewRuns();
   else if (S.tab === 'palavras' && isAdmin()) viewKeywords();
@@ -360,7 +360,7 @@ function paintAlert() {
     lines.push('Veja o registro e os arquivos de diagnóstico na aba Rodadas. Dá para retomar de onde parou.');
   }
   const actions = [];
-  if (isAdmin()) actions.push(h('button', { class: 'btn small', onclick: () => { setTab('rodadas'); S.runSel = a.run_id; } }, 'Ver a rodada'));
+  actions.push(h('button', { class: 'btn small', onclick: () => { setTab('rodadas'); S.runSel = a.run_id; } }, 'Ver a rodada'));
   actions.push(h('button', { class: 'btn small ghost', onclick: () => { S.alertDismissed = a.run_id; paintAlert(); } }, 'Entendi'));
   alertEl.append(h('div', { class: 'alertbar ' + (blocked ? 'blocked' : 'failed'), role: 'alert' },
     h('span', { class: 'ai' }, ic('alert')),
@@ -398,7 +398,6 @@ async function onRunClick() {
       await api('/api/runs/stop', { method: 'POST', body: {} });
       toast('Pedido de parada enviado.');
     } else {
-      if (!isAdmin()) return;
       setTab('busca');
       return;
     }
@@ -456,12 +455,12 @@ function paintHomeRun() {
         h('p', null, st.message || 'trabalhando')),
       bar,
       h('div', { class: 'hr-actions' },
-        isAdmin() ? h('button', { class: 'btn primary', onclick: () => setTab('busca') }, ic('eye'), 'Acompanhar') : null,
-        isAdmin() ? h('button', { class: 'btn danger', onclick: onRunClick }, ic('stop'), 'Parar') : null));
+        h('button', { class: 'btn primary', onclick: () => setTab('busca') }, ic('eye'), 'Acompanhar'),
+        h('button', { class: 'btn danger', onclick: onRunClick }, ic('stop'), 'Parar')));
   } else {
     const lr = st.last_run;
     let title = 'Nenhuma busca feita ainda';
-    let text = isAdmin() ? 'Escolha as palavras na aba Busca e comece.' : 'Ainda não há buscas. O administrador inicia por aqui.';
+    let text = 'Escolha as palavras na aba Busca e comece.';
     if (lr) {
       title = 'Última busca ' + ago(lr.finished_at || lr.started_at);
       text = (RUN_LABEL[lr.status] || lr.status) + '. ' + (st.pages || 0) + ' páginas no banco, ' + (st.fresh || 0) + ' novas para ver.';
@@ -469,7 +468,7 @@ function paintHomeRun() {
     kids.push(
       h('div', { class: 'hr-text' }, h('div', { class: 'eyebrow' }, 'Coleta'), h('h2', null, title), h('p', null, text)),
       h('div', { class: 'hr-actions' },
-        isAdmin() ? h('button', { class: 'btn primary big', onclick: () => setTab('busca') }, ic('search'), 'Iniciar busca') : null,
+        h('button', { class: 'btn primary big', onclick: () => setTab('busca') }, ic('search'), 'Iniciar busca'),
         h('button', { class: 'btn', onclick: () => setTab('paginas') }, ic('layers'), 'Ver páginas')));
   }
   homeRunBox.replaceChildren(...kids);
@@ -1204,7 +1203,7 @@ async function showRun(id) {
       ? 'Início em ' + when.toLocaleDateString('pt-BR') + ' às ' + when.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) + (d.finished_at ? ' · Duração: ' + fmtDur(d.started_at, d.finished_at) : '')
       : '';
     const kpi = (icon, value, label) => h('div', { class: 'kpi' }, h('div', { class: 'tile' }, ic(icon)), h('div', null, h('b', { class: 'num' }, String(value)), h('span', null, label)));
-    const idle = isAdmin() && !(S.status && S.status.running);
+    const idle = !(S.status && S.status.running);
     let hasPlan = false;
     try { hasPlan = JSON.parse(d.plan || '[]').length > 0; } catch { hasPlan = false; }
     const canResume = idle && hasPlan && ['interrompida', 'cancelada', 'erro'].includes(d.status);
@@ -1472,7 +1471,7 @@ async function loadUsers(box) {
       } catch (ex) { toast(ex.message, true); }
     } }, 'Criar usuário');
     box.append(
-      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar e exportar. Rodar, palavras-chave, ajustes e acessos ficam só com você (' + d.admin + ').'),
+      h('div', { class: 'hint' }, 'Amigos podem ver a lista, favoritar, anotar, exportar e iniciar buscas. Cadastrar palavras-chave, ajustes e acessos ficam só com você (' + d.admin + ').'),
       h('div', { class: 'fgrid', style: null },
         h('div', null, h('label', { class: 'lbl', for: 'nu-user' }, 'Usuário'), un),
         h('div', null, h('label', { class: 'lbl', for: 'nu-pass' }, 'Senha inicial'), pw)),
