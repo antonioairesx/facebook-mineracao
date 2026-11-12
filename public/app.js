@@ -519,20 +519,34 @@ async function loadHome() {
 
 /* ---------- grupo de etiquetas com selecao multipla ---------- */
 // Nada marcado = todos. Clicar marca ou desmarca cada opcao.
-function chipGroup(selected, onChange) {
+function chipGroup(selected, onChange, moreLabel = 'Mais') {
   const box = h('div', { class: 'cgroup', role: 'group' });
   let items = [];
+  let fold = 0; // quantos itens ficam sempre visiveis; o resto entra na sanfona
+  let open = false;
+  const chip = ([v, l]) => h('button', {
+    type: 'button',
+    class: 'cg' + (selected.has(v) ? ' on' : ''),
+    'aria-pressed': selected.has(v) ? 'true' : 'false',
+    onclick: () => { if (selected.has(v)) selected.delete(v); else selected.add(v); paint(); onChange(); },
+  }, l);
   const paint = () => {
-    box.replaceChildren(...items.map(([v, l]) => h('button', {
-      type: 'button',
-      class: 'cg' + (selected.has(v) ? ' on' : ''),
-      'aria-pressed': selected.has(v) ? 'true' : 'false',
-      onclick: () => { if (selected.has(v)) selected.delete(v); else selected.add(v); paint(); onChange(); },
-    }, l)));
+    const head = fold ? items.slice(0, fold) : items;
+    const rest = fold ? items.slice(fold) : [];
+    const restOn = rest.some(([v]) => selected.has(v));
+    const showRest = open || restOn;
+    box.replaceChildren(...head.map(chip));
+    if (rest.length) {
+      if (showRest) box.append(...rest.map(chip));
+      box.append(h('button', {
+        type: 'button', class: 'linkbtn', 'aria-expanded': showRest ? 'true' : 'false',
+        onclick: () => { open = !showRest; paint(); },
+      }, showRest ? 'Mostrar menos' : moreLabel + ' (' + rest.length + ')'));
+    }
     if (!items.length) box.append(h('span', { class: 'hint' }, 'Nenhuma opção ainda.'));
     if (selected.size) box.append(h('button', { type: 'button', class: 'linkbtn', onclick: () => { selected.clear(); paint(); onChange(); } }, 'Limpar'));
   };
-  return { el: box, set: (list) => { items = list; paint(); } };
+  return { el: box, set: (list, keep = 0) => { items = list; fold = keep; paint(); } };
 }
 
 /* ---------- seletor de paises ---------- */
@@ -631,12 +645,12 @@ function viewSearch() {
 
   const q = h('input', { type: 'text', placeholder: 'Filtrar palavras', value: se.q });
   q.addEventListener('input', () => { se.q = q.value.trim().toLowerCase(); paintPicker(); });
-  const langG = chipGroup(se.langs, () => { paintPicker(); });
+  const langG = chipGroup(se.langs, () => { paintPicker(); }, 'Mais idiomas');
   const nicheG = chipGroup(se.niches, () => { paintPicker(); });
   const fillGroups = () => {
     const present = [...new Set(S.keywords.map((k) => k.lang))];
     const rest = (CN.langs || []).map(([c]) => c).filter((c) => !present.includes(c));
-    langG.set(present.concat(rest).map((c) => [c, (CN.langName[c] || c.toUpperCase()) + (present.includes(c) ? '' : ' (sem palavras)')]));
+    langG.set(present.concat(rest).map((c) => [c, CN.langName[c] || c.toUpperCase()]), present.length);
     nicheG.set([...new Set(S.keywords.map((k) => k.niche).filter(Boolean))].map((n) => [n, n]));
   };
   fillGroups();
