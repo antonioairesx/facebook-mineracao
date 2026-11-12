@@ -641,6 +641,40 @@ function viewSearch() {
   };
   fillGroups();
   loadCountries().then(fillGroups);
+  const tLang = h('select', { id: 'b-tlang' });
+  const fillTLang = () => tLang.replaceChildren(...(CN.langs.length ? CN.langs : [['en', 'Inglês']]).map(([v, l]) => h('option', { value: v }, l)));
+  fillTLang();
+  loadCountries().then(fillTLang);
+  const tStatus = h('div', { class: 'hint' }, 'Marque palavras na lista, escolha o idioma e crie a mesma lista traduzida. Depois é só marcar e iniciar a busca.');
+  const tBtn = h('button', { class: 'btn', type: 'button' }, 'Traduzir marcadas');
+  tBtn.addEventListener('click', async () => {
+    const ids = [...se.sel];
+    if (!ids.length) { toast('Marque as palavras que quer traduzir.', true); return; }
+    const to = tLang.value;
+    tBtn.disabled = true;
+    const created = [];
+    let failed = 0;
+    try {
+      for (let i = 0; i < ids.length; i += 8) {
+        tStatus.textContent = 'Traduzindo ' + Math.min(i + 8, ids.length) + ' de ' + ids.length + '...';
+        const d = await api('/api/keywords/translate', { method: 'POST', body: { ids: ids.slice(i, i + 8), lang: to } });
+        created.push(...d.ids);
+        failed += d.failed.length;
+      }
+      await loadKeywords();
+      se.langs = new Set([to]);
+      se.niches = new Set();
+      se.sel = new Set(created);
+      toast(created.length + ' palavras em ' + (CN.langName[to] || to) + (failed ? ' (' + failed + ' não traduziram)' : '') + '. Já deixei marcadas.');
+      renderTab();
+    } catch (ex) {
+      toast(ex.message, true);
+      tStatus.textContent = 'Falhou: ' + ex.message;
+    } finally { tBtn.disabled = false; }
+  });
+  const tBox = h('div', { class: 'tbox' },
+    h('div', { class: 'lbl' }, 'Traduzir as palavras marcadas'),
+    h('div', { class: 'trow' }, tLang, tBtn), tStatus);
   searchList = h('div', { class: 'picklist' });
   const visible = () => S.keywords.filter((k) =>
     (!se.q || k.term.toLowerCase().includes(se.q)) && (!se.langs.size || se.langs.has(k.lang)) && (!se.niches.size || se.niches.has(k.niche)));
@@ -664,7 +698,7 @@ function viewSearch() {
     h('div', { class: 'pickbtns' },
       h('button', { class: 'linkbtn', type: 'button', onclick: () => { visible().forEach((k) => se.sel.add(k.id)); paintPicker(); paintPreview(); } }, 'Marcar os visíveis'),
       h('button', { class: 'linkbtn', type: 'button', onclick: () => { se.sel.clear(); paintPicker(); paintPreview(); } }, 'Limpar')),
-    searchList);
+    searchList, tBox);
 
   const left = h('div', { class: 'card pad searchform' },
     h('h2', { class: 'sec' }, 'Nova busca'),

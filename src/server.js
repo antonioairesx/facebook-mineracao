@@ -28,6 +28,7 @@ import { readThumb, hasThumb } from './thumbs.js';
 import { recomputeAllDerived } from './store.js';
 import { renderPdf, saveDailyReport, listReports, isReportName, REPORT_DIR } from './report.js';
 import { COUNTRIES, LANGUAGES, LANG_CODES, resolveCountry } from './countries.js';
+import { translateTerm } from './translate.js';
 import { storageInfo, bootInfo } from './storage.js';
 const BOOT = bootInfo();
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
@@ -610,6 +611,34 @@ app.get('/api/keywords', async () => {
     )
     .all(num(getSettings(), 'min_ads'), num(getSettings(), 'min_days'));
   return { rows, default_countries: getSettings().default_countries, skip_chat: getSettings().skip_chat !== '0' };
+});
+
+// Cria as mesmas palavras em outro idioma (traducao automatica gratuita). Chamado em lotes pela tela.
+app.post('/api/keywords/translate', async (req, reply) => {
+  const body = req.body || {};
+  const to = String(body.lang || '').toLowerCase();
+  if (!LANG_CODES.has(to)) return reply.code(400).send({ error: 'Escolha um idioma da lista.' });
+  const ids = (Array.isArray(body.ids) ? body.ids : []).map(Number).filter(Number.isFinite).slice(0, 12);
+  if (!ids.length) return reply.code(400).send({ error: 'Marque ao menos uma palavra.' });
+  const src = db.prepare(`SELECT * FROM keywords WHERE id IN (${ids.map(() => '?').join(',')})`).all(...ids);
+  const ins = db.prepare('INSERT OR IGNORE INTO keywords(term, lang, niche, countries, active, created_at) VALUES (?, ?, ?, ?, 1, ?)');
+  const find = db.prepare('SELECT id FROM keywords WHERE term = ? AND lang = ?');
+  const created = [];
+  const failed = [];
+  let same = 0;
+  for (const k of src) {
+    if (k.lang === to) { same += 1; continue; }
+    try {
+      const term = (await translateTerm(k.term, k.lang, to)).slice(0, 200);
+      if (!term) throw new Error('vazio');
+      ins.run(term, to, k.niche || '', k.countries || '', now());
+      const row = find.get(term, to);
+      if (row) created.push(row.id);
+    } catch (err) {
+      failed.push(k.term);
+    }
+  }
+  return { ok: true, ids: created, failed, same };
 });
 
 app.post('/api/keywords', async (req, reply) => {

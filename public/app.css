@@ -507,3 +507,7 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 .cg:hover { border-color: var(--focus); }
 .cg.on { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); font-weight: 600; }
 .cg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+.tbox { display: grid; gap: 8px; }
+.trow { display: flex; gap: 10px; flex-wrap: wrap; }
+.trow select { flex: 1 1 180px; }
