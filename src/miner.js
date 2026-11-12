@@ -89,7 +89,7 @@ function humanPause(settings) {
 
 async function interruptibleSleep(ms) {
   const end = Date.now() + ms;
-  while (Date.now() < end && !state.stop) await sleep(Math.min(500, end - Date.now()));
+  while (Date.now() < end && !state.stop) await sleep(Math.max(1, Math.min(500, end - Date.now())));
 }
 
 function stamp() {

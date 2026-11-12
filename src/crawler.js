@@ -8,7 +8,7 @@ import { extractAds, mergeAd, parseTotal, looksBlocked } from './parser.js';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+export const sleep = (ms) => new Promise((r) => setTimeout(r, Math.max(1, Number(ms) || 1)));
 export const rnd = (a, b) => a + Math.random() * (b - a);
 
 const LIB = 'https://www.facebook.com/ads/library/';
