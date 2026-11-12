@@ -27,7 +27,7 @@ import { OFFER_LABEL, classifyAd, isScaling, SCALE_DELTA, SCALE_NEW7 } from './c
 import { readThumb, hasThumb } from './thumbs.js';
 import { recomputeAllDerived } from './store.js';
 import { renderPdf, saveDailyReport, listReports, isReportName, REPORT_DIR } from './report.js';
-import { COUNTRIES, resolveCountry } from './countries.js';
+import { COUNTRIES, LANGUAGES, LANG_CODES, resolveCountry } from './countries.js';
 import { storageInfo, bootInfo } from './storage.js';
 const BOOT = bootInfo();
 import { createBackup, sendToDrive, driveConfigured, recordBackup, lastBackupInfo } from './backup.js';
@@ -342,8 +342,9 @@ function buildPagesQuery(query, { forExport = false } = {}) {
     params.push(String(query.tag));
   }
   if (query.niche) {
-    where.push('EXISTS (SELECT 1 FROM page_hits h JOIN keywords k ON k.term = h.term WHERE h.page_id = page_id_x AND k.niche = ?)');
-    params.push(String(query.niche));
+    const ns = String(query.niche).split('|').map((x) => x.trim()).filter(Boolean).slice(0, 50);
+    where.push(`EXISTS (SELECT 1 FROM page_hits h JOIN keywords k ON k.term = h.term WHERE h.page_id = page_id_x AND k.niche IN (${ns.map(() => '?').join(',')}))`);
+    params.push(...ns);
   }
   if (query.scaling === '1') {
     where.push('((delta IS NOT NULL AND delta >= ?) OR new7 >= ?)');
@@ -619,7 +620,7 @@ app.post('/api/keywords', async (req, reply) => {
     .filter(Boolean)
     .slice(0, 1000);
   if (!lines.length) return reply.code(400).send({ error: 'Cole ao menos uma palavra-chave.' });
-  const langOk = ['es', 'en', 'pt'].includes(lang) ? lang : 'es';
+  const langOk = LANG_CODES.has(String(lang || '').toLowerCase()) ? String(lang).toLowerCase() : 'es';
   const cs = parseCountries(countries).join(',');
   const stmt = db.prepare(
     'INSERT OR IGNORE INTO keywords(term, lang, niche, countries, active, created_at) VALUES (?, ?, ?, ?, 1, ?)'
@@ -687,7 +688,7 @@ app.post('/api/keywords/bulk', async (req, reply) => {
 });
 
 // ---------- rodadas ----------
-app.get('/api/countries', async () => ({ rows: COUNTRIES }));
+app.get('/api/countries', async () => ({ rows: COUNTRIES, languages: LANGUAGES }));
 app.get('/api/countries/resolve', async (req) => {
   const codes = [];
   const unknown = [];

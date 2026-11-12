@@ -479,7 +479,7 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 .searchform { display: grid; gap: 16px; }
 .searchform .statusseg { justify-self: start; margin-bottom: 0; }
 .pickbox { display: grid; gap: 10px; }
-.pickfilters { display: grid; grid-template-columns: 1.4fr 1fr 1fr; gap: 10px; }
+.pickfilters { display: grid; grid-template-columns: 1fr; gap: 12px; }
 .pickbtns { display: flex; gap: 18px; }
 .picklist { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: var(--radius-s); }
 .pickrow { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-bottom: 1px solid var(--line-soft); cursor: pointer; flex-wrap: wrap; }
@@ -501,3 +501,9 @@ pre.log { background: var(--term-bg); color: var(--term-ink); border-radius: 10p
 .chip.cx { display: inline-flex; align-items: center; gap: 6px; }
 .chip.cx button { border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0 2px; font: inherit; opacity: .7; }
 .chip.cx button:hover { opacity: 1; }
+
+.cgroup { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.cg { border: 1px solid var(--line); background: var(--surface); color: var(--text); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.cg:hover { border-color: var(--focus); }
+.cg.on { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); font-weight: 600; }
+.cg:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }

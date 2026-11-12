@@ -5,8 +5,8 @@ const toastEl = document.getElementById('toast');
 const S = {
   tab: 'inicio',
   defaultCountries: 'ALL',
-  search: { mode: 'all', sel: new Set(), q: '', lang: '', niche: '', countries: '', skipChat: true, minAds: '', minDays: '', smode: '', target: '' },
-  filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niche: '', offer: '', tag: '', scaling: false, hideChat: true },
+  search: { mode: 'all', sel: new Set(), q: '', langs: new Set(), niches: new Set(), countries: '', skipChat: true, minAds: '', minDays: '', smode: '', target: '' },
+  filters: { q: '', status: 'active', min_ads: '', min_days: '', country: '', term: '', only: false, niches: new Set(), offer: '', tag: '', scaling: false, hideChat: true },
   facets: { niches: [], tags: [], offers: [] },
   reports: [],
   alertDismissed: 0,
@@ -517,10 +517,28 @@ async function loadHome() {
   } catch (ex) { toast(ex.message, true); }
 }
 
+/* ---------- grupo de etiquetas com selecao multipla ---------- */
+// Nada marcado = todos. Clicar marca ou desmarca cada opcao.
+function chipGroup(selected, onChange) {
+  const box = h('div', { class: 'cgroup', role: 'group' });
+  let items = [];
+  const paint = () => {
+    box.replaceChildren(...items.map(([v, l]) => h('button', {
+      type: 'button',
+      class: 'cg' + (selected.has(v) ? ' on' : ''),
+      'aria-pressed': selected.has(v) ? 'true' : 'false',
+      onclick: () => { if (selected.has(v)) selected.delete(v); else selected.add(v); paint(); onChange(); },
+    }, l)));
+    if (!items.length) box.append(h('span', { class: 'hint' }, 'Nenhuma opção ainda.'));
+    if (selected.size) box.append(h('button', { type: 'button', class: 'linkbtn', onclick: () => { selected.clear(); paint(); onChange(); } }, 'Limpar'));
+  };
+  return { el: box, set: (list) => { items = list; paint(); } };
+}
+
 /* ---------- seletor de paises ---------- */
-const CN = { list: null, byCode: {}, p: null };
+const CN = { list: null, byCode: {}, langs: [], langName: {}, p: null };
 function loadCountries() {
-  if (!CN.p) CN.p = api('/api/countries').then((d) => { CN.list = d.rows; for (const [c, n] of d.rows) CN.byCode[c] = n; return CN; }).catch(() => { CN.p = null; return CN; });
+  if (!CN.p) CN.p = api('/api/countries').then((d) => { CN.list = d.rows; for (const [c, n] of d.rows) CN.byCode[c] = n; CN.langs = d.languages || []; for (const [c, n] of CN.langs) CN.langName[c] = n; return CN; }).catch(() => { CN.p = null; return CN; });
   return CN.p;
 }
 const countryName = (c) => CN.byCode[String(c).toUpperCase()] || c;
@@ -613,14 +631,18 @@ function viewSearch() {
 
   const q = h('input', { type: 'text', placeholder: 'Filtrar palavras', value: se.q });
   q.addEventListener('input', () => { se.q = q.value.trim().toLowerCase(); paintPicker(); });
-  const lang = h('select', null, [['', 'Todos os idiomas'], ['es', 'Espanhol'], ['en', 'Inglês'], ['pt', 'Português']].map(([v, l]) => h('option', { value: v, selected: se.lang === v }, l)));
-  lang.addEventListener('change', () => { se.lang = lang.value; paintPicker(); });
-  const niches = [...new Set(S.keywords.map((k) => k.niche).filter(Boolean))];
-  const niche = h('select', null, h('option', { value: '' }, 'Todos os nichos'), niches.map((n) => h('option', { value: n, selected: se.niche === n }, n)));
-  niche.addEventListener('change', () => { se.niche = niche.value; paintPicker(); });
+  const langG = chipGroup(se.langs, () => { paintPicker(); });
+  const nicheG = chipGroup(se.niches, () => { paintPicker(); });
+  const fillGroups = () => {
+    const present = [...new Set(S.keywords.map((k) => k.lang))];
+    langG.set(present.map((c) => [c, CN.langName[c] || c.toUpperCase()]));
+    nicheG.set([...new Set(S.keywords.map((k) => k.niche).filter(Boolean))].map((n) => [n, n]));
+  };
+  fillGroups();
+  loadCountries().then(fillGroups);
   searchList = h('div', { class: 'picklist' });
   const visible = () => S.keywords.filter((k) =>
-    (!se.q || k.term.toLowerCase().includes(se.q)) && (!se.lang || k.lang === se.lang) && (!se.niche || k.niche === se.niche));
+    (!se.q || k.term.toLowerCase().includes(se.q)) && (!se.langs.size || se.langs.has(k.lang)) && (!se.niches.size || se.niches.has(k.niche)));
   function paintPicker() {
     if (se.mode !== 'pick') return;
     const list = visible();
@@ -635,7 +657,9 @@ function viewSearch() {
     }) : [h('div', { class: 'empty' }, 'Nenhuma palavra com esses filtros.')]));
   }
   pickBox.append(
-    h('div', { class: 'pickfilters' }, q, lang, niche),
+    h('div', { class: 'pickfilters' }, q,
+      h('div', null, h('div', { class: 'lbl' }, 'Idiomas'), langG.el),
+      h('div', null, h('div', { class: 'lbl' }, 'Nichos'), nicheG.el)),
     h('div', { class: 'pickbtns' },
       h('button', { class: 'linkbtn', type: 'button', onclick: () => { visible().forEach((k) => se.sel.add(k.id)); paintPicker(); paintPreview(); } }, 'Marcar os visíveis'),
       h('button', { class: 'linkbtn', type: 'button', onclick: () => { se.sel.clear(); paintPicker(); paintPreview(); } }, 'Limpar')),
@@ -746,7 +770,7 @@ function queryString() {
   if (f.country) p.set('country', f.country);
   if (f.term) p.set('term', f.term);
   if (f.only) p.set('qualifies', '1');
-  if (f.niche) p.set('niche', f.niche);
+  if (f.niches.size) p.set('niche', [...f.niches].join('|'));
   if (f.offer) p.set('offer', f.offer);
   if (f.tag) p.set('tag', f.tag);
   if (f.scaling) p.set('scaling', '1');
@@ -785,8 +809,7 @@ function viewPages() {
   scaling.addEventListener('change', () => { f.scaling = scaling.checked; loadPages(); });
   const hideChat = h('input', { type: 'checkbox', id: 'f-hidechat', checked: f.hideChat });
   hideChat.addEventListener('change', () => { f.hideChat = hideChat.checked; loadPages(); });
-  const niche = h('select', { id: 'f-niche' }, h('option', { value: '' }, 'Todos os nichos'));
-  niche.addEventListener('change', () => { f.niche = niche.value; loadPages(); });
+  const nicheG = chipGroup(f.niches, () => loadPages());
   const offer = h('select', { id: 'f-offer' }, h('option', { value: '' }, 'Todas as ofertas'));
   offer.addEventListener('change', () => { f.offer = offer.value; loadPages(); });
   const tag = h('select', { id: 'f-tag' }, h('option', { value: '' }, 'Todas as etiquetas'));
@@ -795,7 +818,7 @@ function viewPages() {
     const fill = (sel, items, cur, first) => {
       sel.replaceChildren(h('option', { value: '' }, first), ...items.map(([v, l]) => h('option', { value: v, selected: cur === v }, l)));
     };
-    fill(niche, S.facets.niches.map((n) => [n, n]), f.niche, 'Todos os nichos');
+    nicheG.set(S.facets.niches.map((n) => [n, n]));
     fill(offer, S.facets.offers.map((o) => [o.type, o.label + ' (' + o.n + ')']), f.offer, 'Todas as ofertas');
     fill(tag, S.facets.tags.map((t) => [t.tag, t.tag + ' (' + t.n + ')']), f.tag, 'Todas as etiquetas');
   };
@@ -815,7 +838,7 @@ function viewPages() {
       field('Dias (mín.)', minDays, 'f-days'),
       field('País', country, 'f-country'),
       h('div', { class: 'wide' }, field('Palavra-chave', term, 'f-term')),
-      field('Nicho', niche, 'f-niche'),
+      h('div', { class: 'wide' }, h('div', { class: 'lbl' }, 'Nichos'), nicheG.el),
       field('Oferta', offer, 'f-offer'),
       field('Etiqueta', tag, 'f-tag'),
       h('div', { class: 'checks' },
@@ -1342,6 +1365,7 @@ async function loadKeywords() {
 function viewKeywords() {
   const text = h('textarea', { id: 'k-text', placeholder: 'Uma por linha. Use + entre termos:\nbajar de peso + truco + gelatina' });
   const lang = h('select', { id: 'k-lang' }, [['es', 'Espanhol'], ['en', 'Inglês'], ['pt', 'Português']].map(([v, l]) => h('option', { value: v }, l)));
+  loadCountries().then(() => { if (CN.langs.length) lang.replaceChildren(...CN.langs.map(([v, l]) => h('option', { value: v }, l))); });
   const niche = h('input', { type: 'text', id: 'k-niche', placeholder: 'Emagrecimento', maxlength: '60' });
   const countries = countryPicker({ id: 'k-countries', value: '', placeholder: 'Vazio usa os países padrão' });
   const add = h('button', { class: 'btn primary', onclick: async () => {

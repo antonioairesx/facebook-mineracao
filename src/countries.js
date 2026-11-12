@@ -67,3 +67,13 @@ export function resolveCountry(input) {
   }
   return hit ? { code: hit.code, name: hit.name } : null;
 }
+
+// Idiomas das palavras-chave (so rotulo e filtro, a Biblioteca busca o texto como esta escrito)
+export const LANGUAGES = [
+  ['es', 'Espanhol'], ['en', 'Inglês'], ['pt', 'Português'], ['fr', 'Francês'], ['it', 'Italiano'], ['de', 'Alemão'],
+  ['nl', 'Holandês'], ['pl', 'Polonês'], ['ro', 'Romeno'], ['ru', 'Russo'], ['uk', 'Ucraniano'], ['tr', 'Turco'],
+  ['ar', 'Árabe'], ['he', 'Hebraico'], ['hi', 'Hindi'], ['id', 'Indonésio'], ['ms', 'Malaio'], ['vi', 'Vietnamita'],
+  ['th', 'Tailandês'], ['ja', 'Japonês'], ['ko', 'Coreano'], ['zh', 'Chinês'], ['el', 'Grego'], ['sv', 'Sueco'],
+  ['cs', 'Tcheco'], ['hu', 'Húngaro'], ['fil', 'Filipino'], ['sw', 'Suaíli'],
+];
+export const LANG_CODES = new Set(LANGUAGES.map(([c]) => c));
