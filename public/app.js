@@ -635,7 +635,8 @@ function viewSearch() {
   const nicheG = chipGroup(se.niches, () => { paintPicker(); });
   const fillGroups = () => {
     const present = [...new Set(S.keywords.map((k) => k.lang))];
-    langG.set(present.map((c) => [c, CN.langName[c] || c.toUpperCase()]));
+    const rest = (CN.langs || []).map(([c]) => c).filter((c) => !present.includes(c));
+    langG.set(present.concat(rest).map((c) => [c, (CN.langName[c] || c.toUpperCase()) + (present.includes(c) ? '' : ' (sem palavras)')]));
     nicheG.set([...new Set(S.keywords.map((k) => k.niche).filter(Boolean))].map((n) => [n, n]));
   };
   fillGroups();
